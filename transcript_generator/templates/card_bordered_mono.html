@@ -1,0 +1,214 @@
+<!--CONFIG {
+  "grade_scale": "pass_fail",
+  "courses_per_semester": [4, 6],
+  "semesters": [2, 4],
+  "course_code_format": "dept_hyphen_num",
+  "has_credits": false,
+  "has_semester_gpa": false,
+  "has_cumulative_gpa": true,
+  "has_standing": false,
+  "credit_values": [3.0],
+  "seasons": ["Block 1", "Block 2"],
+  "year_range": [2021, 2025]
+} -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Academic Transcript</title>
+  <style>
+    @page {
+      size: letter;
+      margin: 0.75in;
+    }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: "Courier New", monospace;
+      color: #000;
+      line-height: 1.4;
+      background-color: #fff;
+    }
+    .container {
+      max-width: 8.5in;
+      margin: 0 auto;
+      background-color: white;
+      padding: 20px;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 25px;
+      border: 2px solid #000;
+      padding: 15px;
+      page-break-inside: avoid;
+    }
+    .header h1 {
+      color: #000;
+      font-size: 20px;
+      margin-bottom: 5px;
+      letter-spacing: 2px;
+    }
+    .header p {
+      color: #000;
+      font-size: 12px;
+    }
+    .student-info {
+      display: block;
+      margin-bottom: 20px;
+      border: 2px solid #000;
+      padding: 15px;
+      page-break-inside: avoid;
+    }
+    .info-item {
+      margin-bottom: 8px;
+      font-size: 12px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .info-label {
+      font-weight: bold;
+      min-width: 120px;
+    }
+    .info-value {
+      color: #000;
+      flex: 1;
+      text-align: right;
+    }
+    .info-item:not(:last-child) {
+      border-bottom: 1px solid #000;
+      padding-bottom: 6px;
+      margin-bottom: 6px;
+    }
+    .semester-card {
+      border: 2px solid #000;
+      margin-bottom: 18px;
+      page-break-inside: avoid;
+    }
+    .semester-header {
+      background-color: #fff;
+      color: #000;
+      padding: 12px 15px;
+      border-bottom: 2px solid #000;
+      font-weight: bold;
+      font-size: 13px;
+      letter-spacing: 1px;
+    }
+    .semester-body {
+      padding: 0;
+    }
+    .course-row {
+      border: 2px solid #000;
+      margin: 8px;
+      padding: 10px;
+      font-size: 12px;
+      page-break-inside: avoid;
+    }
+    .course-code {
+      font-weight: bold;
+      margin-bottom: 4px;
+      display: block;
+    }
+    .course-name {
+      margin-bottom: 4px;
+      display: block;
+    }
+    .course-grade {
+      font-weight: bold;
+      display: block;
+    }
+    .cumulative-section {
+      border: 2px solid #000;
+      padding: 15px;
+      margin-top: 20px;
+      page-break-inside: avoid;
+    }
+    .cumulative-title {
+      font-weight: bold;
+      margin-bottom: 10px;
+      font-size: 13px;
+      letter-spacing: 1px;
+      border-bottom: 2px solid #000;
+      padding-bottom: 8px;
+    }
+    .cumulative-stats {
+      font-size: 12px;
+    }
+    .stat-item {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 6px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid #000;
+    }
+    .stat-item:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+    .stat-label {
+      font-weight: bold;
+    }
+    .stat-value {
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>ACADEMIC TRANSCRIPT</h1>
+      <p>{INSTITUTION}</p>
+    </div>
+
+    <div class="student-info">
+      <div class="info-item">
+        <span class="info-label">STUDENT NAME</span>
+        <span class="info-value">{STUDENT_NAME}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">STUDENT ID</span>
+        <span class="info-value">{STUDENT_ID}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">PROGRAM</span>
+        <span class="info-value">{PROGRAM}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">ISSUE DATE</span>
+        <span class="info-value">{ISSUE_DATE}</span>
+      </div>
+    </div>
+
+    <!-- BEGIN:SEMESTER_BLOCK -->
+    <div class="semester-card">
+      <div class="semester-header">
+        {SEMESTER}
+      </div>
+      <div class="semester-body">
+        <!-- BEGIN:COURSE_BLOCK -->
+        <div class="course-row">
+          <span class="course-code">{CODE}</span>
+          <span class="course-name">{COURSE_NAME}</span>
+          <span class="course-grade">GRADE: {GRADE}</span>
+        </div>
+        <!-- END:COURSE_BLOCK -->
+      </div>
+    </div>
+    <!-- END:SEMESTER_BLOCK -->
+
+    <div class="cumulative-section">
+      <div class="cumulative-title">CUMULATIVE SUMMARY</div>
+      <div class="cumulative-stats">
+        <div class="stat-item">
+          <span class="stat-label">CUMULATIVE GPA:</span>
+          <span class="stat-value">{CUMULATIVE_GPA}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

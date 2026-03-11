@@ -1,0 +1,207 @@
+<!--CONFIG {
+  "grade_scale": "gpa_point",
+  "courses_per_semester": [4, 6],
+  "semesters": [3, 6],
+  "course_code_format": "dept_hyphen_num",
+  "has_credits": true,
+  "has_semester_gpa": true,
+  "has_cumulative_gpa": true,
+  "has_standing": true,
+  "credit_values": [3.0, 4.0],
+  "seasons": ["Autumn", "Spring"],
+  "year_range": [2018, 2025]
+} -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Academic Transcript - Burgundy Warm</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    @page {
+      margin: 0.5in;
+      size: letter;
+    }
+    body {
+      font-family: 'Georgia', serif;
+      background: #fffdf5;
+      color: #333;
+      padding: 25px;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: #fffdf5;
+    }
+    .header {
+      text-align: center;
+      padding: 30px 20px;
+      margin-bottom: 35px;
+      background: #fffdf5;
+    }
+    .header h1 {
+      color: #800020;
+      font-size: 26px;
+      margin-bottom: 20px;
+      letter-spacing: 1px;
+    }
+    .header-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .header-table td {
+      padding: 8px;
+      border-bottom: 1px solid #d4a5a5;
+    }
+    .header-table td:first-child {
+      font-weight: bold;
+      color: #800020;
+      width: 30%;
+      text-align: right;
+      padding-right: 20px;
+    }
+    .header-table td:last-child {
+      text-align: left;
+    }
+    .semester-block {
+      margin-bottom: 40px;
+      page-break-inside: avoid;
+    }
+    .semester-header {
+      background: #800020;
+      color: #fffdf5;
+      padding: 14px 16px;
+      font-size: 15px;
+      font-weight: bold;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+    }
+    .semester-info {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 14px;
+      padding: 0 8px;
+      font-size: 13px;
+    }
+    .semester-info span {
+      color: #800020;
+      font-weight: bold;
+    }
+    .courses-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 15px;
+    }
+    .courses-table th {
+      background: #800020;
+      color: #fffdf5;
+      padding: 11px 12px;
+      text-align: left;
+      font-size: 13px;
+      font-weight: bold;
+    }
+    .courses-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #d4a5a5;
+      font-size: 13px;
+    }
+    .courses-table tbody tr:hover {
+      background: #fdf7f0;
+    }
+    .standing {
+      color: #800020;
+      font-weight: bold;
+    }
+    .summary {
+      background: #fffdf5;
+      border: 2px solid #800020;
+      padding: 20px;
+      margin-top: 35px;
+      text-align: center;
+      font-size: 14px;
+    }
+    .summary-row {
+      margin: 10px 0;
+    }
+    .summary-label {
+      font-weight: bold;
+      color: #800020;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>{INSTITUTION}</h1>
+      <table class="header-table">
+        <tr>
+          <td>Student Name:</td>
+          <td>{STUDENT_NAME}</td>
+        </tr>
+        <tr>
+          <td>Student ID:</td>
+          <td>{STUDENT_ID}</td>
+        </tr>
+        <tr>
+          <td>Program:</td>
+          <td>{PROGRAM}</td>
+        </tr>
+        <tr>
+          <td>Faculty:</td>
+          <td>{FACULTY}</td>
+        </tr>
+        <tr>
+          <td>Issue Date:</td>
+          <td>{ISSUE_DATE}</td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- BEGIN:SEMESTER_BLOCK -->
+    <div class="semester-block">
+      <div class="semester-header">{SEMESTER}</div>
+      <div class="semester-info">
+        <span>GPA: {SEMESTER_GPA}</span>
+        <span>Credits: {SEMESTER_CREDITS}</span>
+        <span class="standing">Standing: {STANDING}</span>
+      </div>
+      <table class="courses-table">
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Course Title</th>
+            <th>Grade</th>
+            <th>Credits</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- BEGIN:COURSE_BLOCK -->
+          <tr>
+            <td><strong>{CODE}</strong></td>
+            <td>{COURSE_NAME}</td>
+            <td>{GRADE}</td>
+            <td>{CREDITS}</td>
+          </tr>
+          <!-- END:COURSE_BLOCK -->
+        </tbody>
+      </table>
+    </div>
+    <!-- END:SEMESTER_BLOCK -->
+
+    <div class="summary">
+      <div class="summary-row">
+        <span class="summary-label">Cumulative GPA:</span> {CUMULATIVE_GPA}
+      </div>
+      <div class="summary-row">
+        <span class="summary-label">Total Credits Earned:</span> {TOTAL_CREDITS}
+      </div>
+    </div>
+  </div>
+</body>
+</html>

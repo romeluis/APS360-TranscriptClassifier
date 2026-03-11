@@ -1,0 +1,234 @@
+<!--CONFIG {
+    "grade_scale": "percentage",
+    "courses_per_semester": [3, 5],
+    "semesters": [3, 6],
+    "course_code_format": "dept_hyphen_num",
+    "has_credits": false,
+    "has_semester_gpa": false,
+    "has_cumulative_gpa": true,
+    "has_standing": false,
+    "credit_values": [3.0],
+    "seasons": ["Michaelmas", "Hilary", "Trinity"],
+    "year_range": [2018, 2025]
+} -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Academic Transcript</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 0.75in;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: "Courier New", Courier, monospace;
+            color: #5d4e37;
+            background: #f4f0e8;
+            line-height: 1.4;
+        }
+
+        .container {
+            max-width: 8.5in;
+            margin: 0 auto;
+            background: #f4f0e8;
+            padding: 0;
+            min-height: 11in;
+        }
+
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #5d4e37;
+            padding-bottom: 15px;
+            margin-bottom: 15px;
+        }
+
+        .institution {
+            font-size: 13pt;
+            font-weight: bold;
+            letter-spacing: 3px;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+        }
+
+        .divider-top {
+            border-bottom: 1px solid #5d4e37;
+            margin: 8px 0;
+            font-size: 8pt;
+            letter-spacing: 2px;
+            text-align: center;
+            padding: 4px 0;
+        }
+
+        .title {
+            font-size: 10pt;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .student-info {
+            margin-bottom: 20px;
+            font-size: 10pt;
+            line-height: 1.6;
+        }
+
+        .info-item {
+            margin-bottom: 4px;
+        }
+
+        .info-label {
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .divider-section {
+            border-bottom: 1px dashed #5d4e37;
+            margin: 12px 0;
+            font-size: 8pt;
+            letter-spacing: 1px;
+        }
+
+        .semester-container {
+            margin-bottom: 18px;
+            page-break-inside: avoid;
+        }
+
+        .semester-header {
+            font-size: 10pt;
+            font-weight: bold;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+            text-decoration: underline;
+        }
+
+        .semester-gpa {
+            font-size: 9pt;
+            margin-bottom: 4px;
+        }
+
+        .course-item {
+            font-size: 9pt;
+            margin-bottom: 2px;
+            display: flex;
+            gap: 6px;
+        }
+
+        .course-code {
+            font-weight: bold;
+            min-width: 50px;
+            text-transform: uppercase;
+        }
+
+        .course-name {
+            flex: 1;
+        }
+
+        .course-grade {
+            min-width: 30px;
+            text-align: right;
+        }
+
+        .divider-summary {
+            border-bottom: 1px dashed #5d4e37;
+            margin: 12px 0;
+        }
+
+        .summary {
+            margin-top: 15px;
+            font-size: 10pt;
+        }
+
+        .summary-title {
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+        }
+
+        .summary-item {
+            margin-bottom: 6px;
+        }
+
+        .summary-label {
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .summary-value {
+            display: inline;
+        }
+
+        .issue-date {
+            margin-top: 15px;
+            font-size: 9pt;
+            text-align: right;
+            border-top: 1px dashed #5d4e37;
+            padding-top: 8px;
+        }
+    </style>
+</head>
+<body>
+
+
+<div class="container">
+    <div class="header">
+        <div class="divider-top">= = = = = = = = = = = = = = =</div>
+        <div class="institution">{INSTITUTION}</div>
+        <div class="title">Official Transcript</div>
+        <div class="divider-top">= = = = = = = = = = = = = = =</div>
+    </div>
+
+    <div class="student-info">
+        <div class="info-item">
+            <span class="info-label">STUDENT:</span> {STUDENT_NAME}
+        </div>
+        <div class="info-item">
+            <span class="info-label">ID:</span> {STUDENT_ID}
+        </div>
+        <div class="info-item">
+            <span class="info-label">PROGRAM:</span> {PROGRAM}
+        </div>
+    </div>
+
+    <div class="divider-section">- - - - - - - - - - - - - - - - - - - -</div>
+
+    <!-- BEGIN:SEMESTER_BLOCK -->
+    <div class="semester-container">
+        <div class="semester-header">{SEMESTER}</div>
+
+        <!-- BEGIN:COURSE_BLOCK -->
+        <div class="course-item">
+            <div class="course-code">{CODE}</div>
+            <div class="course-name">{COURSE_NAME}</div>
+            <div class="course-grade">{GRADE}</div>
+        </div>
+        <!-- END:COURSE_BLOCK -->
+    </div>
+    <!-- END:SEMESTER_BLOCK -->
+
+    <div class="divider-summary">- - - - - - - - - - - - - - - - - - - -</div>
+
+    <div class="summary">
+        <div class="summary-title">Summary</div>
+        <div class="summary-item">
+            <span class="summary-label">OVERALL:</span>
+            <span class="summary-value">{CUMULATIVE_GPA}</span>
+        </div>
+    </div>
+
+    <div class="issue-date">DATE: {ISSUE_DATE}</div>
+</div>
+
+</body>
+</html>

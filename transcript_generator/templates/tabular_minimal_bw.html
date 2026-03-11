@@ -1,0 +1,139 @@
+<!--CONFIG {
+  "grade_scale": "percentage",
+  "courses_per_semester": [3, 5],
+  "semesters": [2, 4],
+  "course_code_format": "4letter_3digit",
+  "has_credits": false,
+  "has_semester_gpa": false,
+  "has_cumulative_gpa": true,
+  "has_standing": false,
+  "credit_values": [3.0],
+  "seasons": ["Fall", "Spring"],
+  "year_range": [2020, 2026]
+} -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Academic Transcript - Minimal B/W</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    @page {
+      margin: 0.5in;
+      size: letter;
+    }
+    body {
+      font-family: 'Courier New', monospace;
+      background: white;
+      color: black;
+      padding: 20px;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: white;
+    }
+    .header {
+      padding: 15px 0;
+      margin-bottom: 25px;
+      border-bottom: 1px solid black;
+    }
+    .header h1 {
+      font-size: 16px;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+    .header-info {
+      font-size: 11px;
+      line-height: 1.4;
+    }
+    .semester-block {
+      margin-bottom: 25px;
+      page-break-inside: avoid;
+    }
+    .semester-header {
+      font-weight: bold;
+      font-size: 12px;
+      padding: 8px 0;
+      border-bottom: 1px solid black;
+      margin-bottom: 8px;
+    }
+    .courses-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+      margin-bottom: 10px;
+    }
+    .courses-table th {
+      border: 1px solid black;
+      padding: 6px;
+      text-align: left;
+      font-weight: bold;
+      background: white;
+    }
+    .courses-table td {
+      border: 1px solid black;
+      padding: 6px;
+    }
+    .summary {
+      padding: 12px 0;
+      border-top: 1px solid black;
+      border-bottom: 1px solid black;
+      font-size: 11px;
+      text-align: right;
+      margin-top: 15px;
+    }
+    .summary-row {
+      margin: 4px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>{INSTITUTION}</h1>
+      <div class="header-info">
+        STUDENT NAME: {STUDENT_NAME}<br>
+        STUDENT ID: {STUDENT_ID}<br>
+        PROGRAM: {PROGRAM}<br>
+        ISSUE DATE: {ISSUE_DATE}
+      </div>
+    </div>
+
+    <!-- BEGIN:SEMESTER_BLOCK -->
+    <div class="semester-block">
+      <div class="semester-header">{SEMESTER}</div>
+      <table class="courses-table">
+        <thead>
+          <tr>
+            <th>CODE</th>
+            <th>COURSE NAME</th>
+            <th>GRADE</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- BEGIN:COURSE_BLOCK -->
+          <tr>
+            <td>{CODE}</td>
+            <td>{COURSE_NAME}</td>
+            <td>{GRADE}</td>
+          </tr>
+          <!-- END:COURSE_BLOCK -->
+        </tbody>
+      </table>
+    </div>
+    <!-- END:SEMESTER_BLOCK -->
+
+    <div class="summary">
+      <div class="summary-row">
+        CUMULATIVE GPA: {CUMULATIVE_GPA}
+      </div>
+    </div>
+  </div>
+</body>
+</html>

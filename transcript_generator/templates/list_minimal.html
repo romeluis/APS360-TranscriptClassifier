@@ -1,0 +1,145 @@
+<!--CONFIG
+{
+  "grade_scale": "percentage",
+  "courses_per_semester": [3, 5],
+  "semesters": [2, 6],
+  "course_code_format": "4letter_3digit",
+  "has_credits": false,
+  "has_semester_gpa": false,
+  "has_cumulative_gpa": true,
+  "has_standing": false,
+  "credit_values": [3.0],
+  "seasons": ["Fall", "Spring"],
+  "year_range": [2019, 2025]
+}
+-->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @page {
+    size: letter;
+    margin: 2.5cm 2cm;
+    @bottom-right {
+      content: "Page " counter(page) " of " counter(pages);
+      font-size: 8pt;
+      color: #999;
+    }
+  }
+
+  body {
+    font-family: "Courier New", monospace;
+    font-size: 10pt;
+    color: #111;
+    line-height: 1.6;
+  }
+
+  .header {
+    text-align: center;
+    margin-bottom: 30px;
+    padding-bottom: 15px;
+    border-bottom: 3px double #333;
+  }
+  .header .inst-name {
+    font-size: 14pt;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+  }
+  .header .subtitle {
+    font-size: 9pt;
+    margin-top: 5px;
+    color: #555;
+  }
+
+  .info-line {
+    margin: 2px 0;
+  }
+  .info-section {
+    margin-bottom: 20px;
+  }
+
+  .divider {
+    border: none;
+    border-top: 1px dashed #aaa;
+    margin: 15px 0;
+  }
+
+  .semester-name {
+    font-weight: bold;
+    text-decoration: underline;
+    margin: 20px 0 8px 0;
+  }
+
+  .course-line {
+    margin: 3px 0 3px 20px;
+    white-space: nowrap;
+  }
+  .course-code {
+    display: inline-block;
+    width: 100px;
+  }
+  .course-title {
+    display: inline-block;
+    width: 300px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .course-grade {
+    display: inline-block;
+    width: 50px;
+    text-align: right;
+  }
+
+  .summary-section {
+    margin-top: 25px;
+    padding-top: 10px;
+    border-top: 3px double #333;
+  }
+
+  .end-mark {
+    text-align: center;
+    margin-top: 30px;
+    color: #888;
+    font-size: 9pt;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="inst-name">{INSTITUTION}</div>
+  <div class="subtitle">TRANSCRIPT OF ACADEMIC RECORD</div>
+</div>
+
+<div class="info-section">
+  <p class="info-line">{STUDENT_NAME} (ID: {STUDENT_ID})</p>
+  <p class="info-line">{PROGRAM}</p>
+  <p class="info-line">Issued: {ISSUE_DATE}</p>
+</div>
+
+<hr class="divider">
+
+<!-- BEGIN:SEMESTER_BLOCK -->
+<div>
+  <p class="semester-name">{SEMESTER}</p>
+  <!-- BEGIN:COURSE_BLOCK -->
+  <div class="course-line">
+    <span class="course-code">{CODE}</span>
+    <span class="course-title">{COURSE_NAME}</span>
+    <span class="course-grade">{GRADE}</span>
+  </div>
+  <!-- END:COURSE_BLOCK -->
+</div>
+<!-- END:SEMESTER_BLOCK -->
+
+<div class="summary-section">
+  <p>Cumulative GPA: {CUMULATIVE_GPA}</p>
+</div>
+
+<p class="end-mark">--- END OF TRANSCRIPT ---</p>
+
+</body>
+</html>

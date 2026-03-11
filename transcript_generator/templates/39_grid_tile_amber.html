@@ -1,0 +1,221 @@
+<!--CONFIG {
+    "grade_scale": "letter",
+    "courses_per_semester": [3, 5],
+    "semesters": [2, 6],
+    "course_code_format": "3letter_3digit",
+    "has_credits": false,
+    "has_semester_gpa": true,
+    "has_cumulative_gpa": true,
+    "has_standing": true,
+    "credit_values": [3.0],
+    "seasons": ["Fall", "Spring"],
+    "year_range": [2020, 2026]
+} -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Academic Transcript</title>
+    <style>
+        @page {
+            size: letter;
+            margin: 0.75in;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: "Trebuchet MS", sans-serif;
+            color: #333;
+            line-height: 1.5;
+            background-color: #f9f9f9;
+        }
+
+        .page-header {
+            background-color: #ff8f00;
+            color: white;
+            padding: 16px;
+            margin: -9px -9px 20px -9px;
+            border-bottom: 4px solid #e65100;
+        }
+
+        .page-header h1 {
+            font-size: 26px;
+            margin-bottom: 3px;
+            font-weight: bold;
+        }
+
+        .page-header p {
+            font-size: 12px;
+        }
+
+        .student-header {
+            display: flex;
+            gap: 30px;
+            margin-bottom: 20px;
+            padding: 12px;
+            background-color: #fff3e0;
+            border-radius: 4px;
+        }
+
+        .student-info-col {
+            flex: 1;
+        }
+
+        .student-info-col p {
+            font-size: 12px;
+            margin-bottom: 3px;
+        }
+
+        .student-info-col strong {
+            color: #ff8f00;
+        }
+
+        .semester-section {
+            margin-bottom: 25px;
+            page-break-inside: avoid;
+        }
+
+        .semester-header {
+            background-color: #ff8f00;
+            color: white;
+            padding: 8px 12px;
+            font-size: 13px;
+            font-weight: bold;
+            margin-bottom: 12px;
+            border-radius: 3px;
+        }
+
+        .tiles-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+
+        .course-tile {
+            display: inline-block;
+            width: calc(50% - 5px);
+            background-color: white;
+            border: 2px solid #ffb74d;
+            border-radius: 6px;
+            padding: 12px;
+            font-size: 11px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .tile-code {
+            font-weight: bold;
+            color: #ff8f00;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+
+        .tile-name {
+            display: block;
+            font-size: 11px;
+            color: #333;
+            margin-bottom: 6px;
+            min-height: 22px;
+            line-height: 1.4;
+        }
+
+        .tile-grade {
+            display: block;
+            background-color: #ffe0b2;
+            color: #e65100;
+            padding: 4px 6px;
+            border-radius: 3px;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 3px;
+            font-size: 11px;
+        }
+
+        .tile-credits {
+            font-size: 10px;
+            color: #999;
+            text-align: right;
+        }
+
+        .semester-summary {
+            font-size: 11px;
+            padding: 8px 10px;
+            background-color: #fff3e0;
+            border-left: 3px solid #ff8f00;
+        }
+
+        .summary-box {
+            margin-top: 25px;
+            padding: 15px;
+            background-color: #fff3e0;
+            border: 2px solid #ff8f00;
+            border-radius: 4px;
+        }
+
+        .summary-box h3 {
+            color: #ff8f00;
+            font-size: 13px;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+
+        .summary-box p {
+            font-size: 12px;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+
+
+
+<div class="page-header">
+    <h1>{INSTITUTION}</h1>
+    <p>Academic Transcript</p>
+</div>
+
+<div class="student-header">
+    <div class="student-info-col">
+        <p><strong>Student:</strong> {STUDENT_NAME}</p>
+        <p><strong>ID:</strong> {STUDENT_ID}</p>
+    </div>
+    <div class="student-info-col">
+        <p><strong>Program:</strong> {PROGRAM}</p>
+        <p><strong>Issued:</strong> {ISSUE_DATE}</p>
+    </div>
+</div>
+
+<!-- BEGIN:SEMESTER_BLOCK -->
+<div class="semester-section">
+    <div class="semester-header">{SEMESTER}</div>
+
+    <div class="tiles-container">
+        <!-- BEGIN:COURSE_BLOCK -->
+        <div class="course-tile">
+            <div class="tile-code">{CODE}</div>
+            <span class="tile-name">{COURSE_NAME}</span>
+            <div class="tile-grade">{GRADE}</div>
+            <div class="tile-credits"></div>
+        </div>
+        <!-- END:COURSE_BLOCK -->
+    </div>
+
+    <div class="semester-summary">
+        <strong>Semester GPA:</strong> {SEMESTER_GPA} | <strong>Standing:</strong> {STANDING}
+    </div>
+</div>
+<!-- END:SEMESTER_BLOCK -->
+
+<div class="summary-box">
+    <h3>Cumulative Record</h3>
+    <p><strong>Overall GPA:</strong> {CUMULATIVE_GPA}</p>
+</div>
+
+</body>
+</html>

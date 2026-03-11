@@ -1,0 +1,190 @@
+<!--CONFIG {
+  "grade_scale": "percentage",
+  "courses_per_semester": [5, 8],
+  "semesters": [6, 12],
+  "course_code_format": "3letter_3digit",
+  "has_credits": true,
+  "has_semester_gpa": true,
+  "has_cumulative_gpa": true,
+  "has_standing": false,
+  "credit_values": [0.5, 1.0, 1.5],
+  "seasons": ["Fall", "Winter"],
+  "year_range": [2016, 2024]
+} -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Academic Transcript - Dense Compact</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    @page {
+      margin: 0.3in;
+      size: letter;
+    }
+    body {
+      font-family: 'Arial', sans-serif;
+      font-size: 8pt;
+      background: white;
+      color: #000;
+      padding: 8px;
+    }
+    .container {
+      max-width: 100%;
+      margin: 0 auto;
+      background: white;
+    }
+    .header {
+      padding: 6px;
+      margin-bottom: 10px;
+      border-bottom: 1px solid #1a237e;
+    }
+    .header h1 {
+      color: #1a237e;
+      font-size: 14pt;
+      margin-bottom: 4px;
+      font-weight: bold;
+    }
+    .header-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 8pt;
+    }
+    .header-table td {
+      padding: 2px 4px;
+      border: none;
+    }
+    .header-table td:first-child {
+      font-weight: bold;
+      color: #1a237e;
+      width: 20%;
+    }
+    .semester-block {
+      margin-bottom: 8px;
+      page-break-inside: avoid;
+    }
+    .semester-header {
+      background: #1a237e;
+      color: white;
+      padding: 3px 4px;
+      font-size: 8pt;
+      font-weight: bold;
+      margin-bottom: 2px;
+    }
+    .semester-info {
+      display: flex;
+      justify-content: space-between;
+      padding: 2px 4px;
+      font-size: 8pt;
+      margin-bottom: 3px;
+    }
+    .semester-info span {
+      color: #1a237e;
+    }
+    .courses-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 4px;
+      font-size: 8pt;
+    }
+    .courses-table th {
+      background: #1a237e;
+      color: white;
+      padding: 2px 3px;
+      text-align: left;
+      font-weight: bold;
+      border: 0.5px solid #1a237e;
+    }
+    .courses-table td {
+      padding: 2px 3px;
+      border: 0.5px solid #ddd;
+      font-size: 8pt;
+    }
+    .courses-table tr:nth-child(even) {
+      background: #f9f9f9;
+    }
+    .summary {
+      background: #f0f0f0;
+      border: 1px solid #1a237e;
+      padding: 6px;
+      margin-top: 8px;
+      text-align: right;
+      font-size: 8pt;
+    }
+    .summary-row {
+      margin: 2px 0;
+    }
+    .summary-label {
+      font-weight: bold;
+      color: #1a237e;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>{INSTITUTION}</h1>
+      <table class="header-table">
+        <tr>
+          <td>Name:</td>
+          <td>{STUDENT_NAME}</td>
+          <td style="padding-left: 15px;">ID:</td>
+          <td>{STUDENT_ID}</td>
+        </tr>
+        <tr>
+          <td>Program:</td>
+          <td>{PROGRAM}</td>
+          <td style="padding-left: 15px;">Faculty:</td>
+          <td>{FACULTY}</td>
+        </tr>
+        <tr>
+          <td>DOB:</td>
+          <td>{DOB}</td>
+          <td style="padding-left: 15px;">Issue:</td>
+          <td>{ISSUE_DATE}</td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- BEGIN:SEMESTER_BLOCK -->
+    <div class="semester-block">
+      <div class="semester-header">{SEMESTER}</div>
+      <div class="semester-info">
+        <span>GPA: {SEMESTER_GPA}</span>
+        <span>Cr: {SEMESTER_CREDITS}</span>
+      </div>
+      <table class="courses-table">
+        <thead>
+          <tr>
+            <th>CODE</th>
+            <th>COURSE</th>
+            <th>GR</th>
+            <th>CR</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- BEGIN:COURSE_BLOCK -->
+          <tr>
+            <td>{CODE}</td>
+            <td>{COURSE_NAME}</td>
+            <td>{GRADE}</td>
+            <td>{CREDITS}</td>
+          </tr>
+          <!-- END:COURSE_BLOCK -->
+        </tbody>
+      </table>
+    </div>
+    <!-- END:SEMESTER_BLOCK -->
+
+    <div class="summary">
+      <div class="summary-row"><span class="summary-label">CUM GPA:</span> {CUMULATIVE_GPA}</div>
+      <div class="summary-row"><span class="summary-label">TOT CR:</span> {TOTAL_CREDITS}</div>
+    </div>
+  </div>
+</body>
+</html>

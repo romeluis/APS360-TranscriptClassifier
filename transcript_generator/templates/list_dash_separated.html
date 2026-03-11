@@ -1,0 +1,165 @@
+<!--CONFIG {
+  "grade_scale": "pass_fail",
+  "courses_per_semester": [4, 6],
+  "semesters": [2, 4],
+  "course_code_format": "4letter_3digit",
+  "has_credits": false,
+  "has_semester_gpa": false,
+  "has_cumulative_gpa": false,
+  "has_standing": false,
+  "credit_values": [3.0],
+  "seasons": ["Period 1", "Period 2", "Period 3"],
+  "year_range": [2021, 2026]
+} -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Academic Transcript</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    @page {
+      size: letter;
+      margin: 0.75in;
+    }
+
+    body {
+      font-family: Helvetica, Arial, sans-serif;
+      color: #333;
+      line-height: 1.4;
+      font-size: 11pt;
+    }
+
+    .container {
+      max-width: 8.5in;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 1.5rem;
+    }
+
+    .institution {
+      font-size: 13pt;
+      font-weight: bold;
+      margin-bottom: 0.3rem;
+    }
+
+    .document-title {
+      font-size: 11pt;
+      color: #555;
+    }
+
+    .student-info {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem;
+      font-size: 9pt;
+      margin-bottom: 1rem;
+    }
+
+    .info-row {
+      display: inline;
+    }
+
+    .info-label {
+      font-weight: bold;
+      margin-right: 0.3rem;
+    }
+
+    .semester-block {
+      margin-bottom: 1.2rem;
+      page-break-inside: avoid;
+    }
+
+    .semester-header {
+      margin-bottom: 0.6rem;
+      font-weight: bold;
+      font-size: 10pt;
+      color: #333;
+    }
+
+    .course-block {
+      display: flex;
+      align-items: center;
+      margin-bottom: 0.5rem;
+      font-size: 10pt;
+      gap: 0.5rem;
+    }
+
+    .course-code {
+      display: inline-block;
+      font-weight: bold;
+      min-width: 100px;
+    }
+
+    .separator {
+      display: inline;
+      color: #333;
+      margin: 0 0.3rem;
+    }
+
+    .course-name {
+      display: inline-block;
+      flex: 1;
+      min-width: 200px;
+    }
+
+    .course-grade {
+      display: inline-block;
+      font-weight: bold;
+      min-width: 60px;
+      text-align: right;
+    }
+
+    .summary-section {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="institution">{INSTITUTION}</div>
+      <div class="document-title">Course Record</div>
+    </header>
+
+    <div class="student-info">
+      <div class="info-row">
+        <span class="info-label">Name:</span>
+        <span>{STUDENT_NAME}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">ID:</span>
+        <span>{STUDENT_ID}</span>
+      </div>
+    </div>
+
+    <!-- BEGIN:SEMESTER_BLOCK -->
+    <div class="semester-block">
+      <div class="semester-header">
+        {SEMESTER}
+      </div>
+
+      <!-- BEGIN:COURSE_BLOCK -->
+      <div class="course-block">
+        <span class="course-code">{CODE}</span>
+        <span class="separator">—</span>
+        <span class="course-name">{COURSE_NAME}</span>
+        <span class="separator">—</span>
+        <span class="course-grade">{GRADE}</span>
+      </div>
+      <!-- END:COURSE_BLOCK -->
+    </div>
+    <!-- END:SEMESTER_BLOCK -->
+  </div>
+</body>
+</html>

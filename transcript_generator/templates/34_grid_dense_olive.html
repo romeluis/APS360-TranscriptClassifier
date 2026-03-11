@@ -1,0 +1,189 @@
+<!--CONFIG {
+    "grade_scale": "pass_fail",
+    "courses_per_semester": [3, 5],
+    "semesters": [4, 8],
+    "course_code_format": "4letter_3digit",
+    "has_credits": false,
+    "has_semester_gpa": false,
+    "has_cumulative_gpa": true,
+    "has_standing": false,
+    "credit_values": [3.0],
+    "seasons": ["Module 1", "Module 2", "Module 3", "Module 4"],
+    "year_range": [2021, 2026]
+} -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Academic Transcript</title>
+    <style>
+        @page {
+            size: letter;
+            margin: 0.75in;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: "Segoe UI", sans-serif;
+            color: #333;
+            line-height: 1.5;
+            background-color: #f9f8f3;
+        }
+
+        .page-header {
+            background-color: #827717;
+            color: #fffef4;
+            padding: 12px;
+            text-align: center;
+            margin: -9px -9px 15px -9px;
+        }
+
+        .page-header h1 {
+            font-size: 20px;
+            margin-bottom: 3px;
+        }
+
+        .student-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            margin-bottom: 15px;
+            background-color: #f5f5f0;
+            padding: 8px 10px;
+            border-left: 3px solid #827717;
+        }
+
+        .student-col {
+            flex: 1;
+        }
+
+        .student-col p {
+            margin-bottom: 2px;
+        }
+
+        .semester-section {
+            margin-bottom: 20px;
+            page-break-inside: avoid;
+        }
+
+        .semester-header {
+            background-color: #a4ac86;
+            color: white;
+            padding: 8px 10px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .courses-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .course-card {
+            background-color: white;
+            border: 1px solid #d4c19e;
+            padding: 8px;
+            font-size: 10px;
+        }
+
+        .course-card .code {
+            font-weight: bold;
+            color: #827717;
+            display: block;
+            margin-bottom: 3px;
+        }
+
+        .course-card .name {
+            display: block;
+            margin-bottom: 2px;
+            min-height: 20px;
+        }
+
+        .course-card .grade {
+            display: block;
+            color: #555;
+        }
+
+        .semester-summary {
+            font-size: 10px;
+            padding: 6px 8px;
+            background-color: #f5f5f0;
+            border-left: 2px solid #a4ac86;
+        }
+
+        .transcript-summary {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #e8e6d8;
+            border: 1px solid #827717;
+        }
+
+        .transcript-summary h3 {
+            color: #827717;
+            font-size: 11px;
+            margin-bottom: 6px;
+        }
+
+        .transcript-summary p {
+            font-size: 10px;
+            margin-bottom: 3px;
+        }
+    </style>
+</head>
+<body>
+
+
+
+<div class="page-header">
+    <h1>{INSTITUTION}</h1>
+    <p>Academic Transcript</p>
+</div>
+
+<div class="student-header">
+    <div class="student-col">
+        <p><strong>Student:</strong> {STUDENT_NAME}</p>
+        <p><strong>ID:</strong> {STUDENT_ID}</p>
+    </div>
+    <div class="student-col">
+        <p><strong>Program:</strong> {PROGRAM}</p>
+        <p><strong>Issue Date:</strong> {ISSUE_DATE}</p>
+    </div>
+</div>
+
+<!-- BEGIN:SEMESTER_BLOCK -->
+<div class="semester-section">
+    <div class="semester-header">{SEMESTER}</div>
+
+    <div class="courses-grid">
+        <!-- BEGIN:COURSE_BLOCK -->
+        <div class="course-card">
+            <span class="code">{CODE}</span>
+            <span class="name">{COURSE_NAME}</span>
+            <span class="grade">{GRADE}</span>
+        </div>
+        <!-- END:COURSE_BLOCK -->
+    </div>
+
+    <div class="semester-summary">
+        Academic Standing: Good
+    </div>
+</div>
+<!-- END:SEMESTER_BLOCK -->
+
+<div class="transcript-summary">
+    <h3>Cumulative Summary</h3>
+    <p><strong>Overall Performance:</strong> {CUMULATIVE_GPA}</p>
+    <p><strong>Report Date:</strong> {ISSUE_DATE}</p>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,276 @@
+<!--CONFIG {
+  "grade_scale": "letter",
+  "courses_per_semester": [3, 6],
+  "semesters": [3, 8],
+  "course_code_format": "uoft_style",
+  "has_credits": true,
+  "has_semester_gpa": true,
+  "has_cumulative_gpa": true,
+  "has_standing": true,
+  "credit_values": [0.5, 1.0],
+  "seasons": ["Fall", "Winter", "Summer"],
+  "year_range": [2018, 2025]
+} -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Academic Transcript</title>
+  <style>
+    @page {
+      size: letter;
+      margin: 0.75in;
+    }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: "Segoe UI", sans-serif;
+      color: #e0e0e0;
+      line-height: 1.6;
+      background-color: #1a1a2e;
+    }
+    .container {
+      max-width: 8.5in;
+      margin: 0 auto;
+      background-color: #0f1219;
+      padding: 24px;
+      color: #e0e0e0;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 28px;
+      padding-bottom: 18px;
+      border-bottom: 3px solid #00bcd4;
+    }
+    .header h1 {
+      color: #00bcd4;
+      font-size: 26px;
+      margin-bottom: 5px;
+      font-weight: 600;
+    }
+    .header p {
+      color: #a0a0a0;
+      font-size: 14px;
+    }
+    .student-info {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 24px;
+      font-size: 13px;
+    }
+    .info-item {
+      padding: 12px;
+      background-color: #16213e;
+      border-left: 4px solid #00bcd4;
+      border-radius: 4px;
+    }
+    .info-label {
+      font-weight: 600;
+      color: #00bcd4;
+      font-size: 11px;
+      margin-bottom: 3px;
+      display: block;
+    }
+    .info-value {
+      color: #e0e0e0;
+    }
+    .semester-card {
+      background-color: #16213e;
+      border: 1px solid #333;
+      border-radius: 6px;
+      margin-bottom: 20px;
+      overflow: hidden;
+      page-break-inside: avoid;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    }
+    .semester-header {
+      background: linear-gradient(to right, #00bcd4, #0097a7);
+      color: #1a1a2e;
+      padding: 14px 16px;
+      font-weight: 600;
+      font-size: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .semester-name {
+      font-size: 15px;
+      color: #1a1a2e;
+    }
+    .semester-meta {
+      font-size: 12px;
+      color: #1a1a2e;
+    }
+    .semester-body {
+      padding: 16px;
+    }
+    .course-row {
+      display: grid;
+      grid-template-columns: 1fr 2fr 0.8fr 0.6fr;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid #333;
+      align-items: center;
+      font-size: 12px;
+    }
+    .course-row:last-child {
+      border-bottom: none;
+    }
+    .course-code {
+      font-weight: 600;
+      color: #00bcd4;
+    }
+    .course-name {
+      color: #e0e0e0;
+    }
+    .course-grade {
+      color: #b0b0b0;
+      text-align: center;
+      font-weight: 500;
+    }
+    .course-credits {
+      text-align: right;
+      color: #b0b0b0;
+    }
+    .semester-summary {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+      padding: 12px 16px;
+      background-color: #0f1219;
+      border-top: 1px solid #333;
+      font-size: 12px;
+    }
+    .summary-item {
+      text-align: center;
+    }
+    .summary-label {
+      color: #808080;
+      font-size: 11px;
+      margin-bottom: 3px;
+    }
+    .summary-value {
+      color: #00bcd4;
+      font-weight: bold;
+      font-size: 13px;
+    }
+    .cumulative-section {
+      background-color: #16213e;
+      border: 1px solid #333;
+      border-left: 4px solid #00bcd4;
+      border-radius: 6px;
+      padding: 16px;
+      margin-top: 25px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    }
+    .cumulative-title {
+      font-weight: 600;
+      color: #00bcd4;
+      margin-bottom: 12px;
+      font-size: 14px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #333;
+    }
+    .cumulative-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      font-size: 13px;
+    }
+    .stat-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .stat-label {
+      color: #b0b0b0;
+      font-weight: 500;
+    }
+    .stat-value {
+      color: #00bcd4;
+      font-weight: bold;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Academic Transcript</h1>
+      <p>{INSTITUTION}</p>
+    </div>
+
+    <div class="student-info">
+      <div class="info-item">
+        <span class="info-label">Student Name</span>
+        <span class="info-value">{STUDENT_NAME}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Student ID</span>
+        <span class="info-value">{STUDENT_ID}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Program</span>
+        <span class="info-value">{PROGRAM}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Faculty</span>
+        <span class="info-value">{FACULTY}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Issue Date</span>
+        <span class="info-value">{ISSUE_DATE}</span>
+      </div>
+      <div class="info-item" style="background-color: transparent; border: none;"></div>
+    </div>
+
+    <!-- BEGIN:SEMESTER_BLOCK -->
+    <div class="semester-card">
+      <div class="semester-header">
+        <span class="semester-name">{SEMESTER}</span>
+        <span class="semester-meta">GPA: {SEMESTER_GPA} | Credits: {SEMESTER_CREDITS}</span>
+      </div>
+      <div class="semester-body">
+        <!-- BEGIN:COURSE_BLOCK -->
+        <div class="course-row">
+          <div class="course-code">{CODE}</div>
+          <div class="course-name">{COURSE_NAME}</div>
+          <div class="course-grade">{GRADE}</div>
+          <div class="course-credits">{CREDITS}</div>
+        </div>
+        <!-- END:COURSE_BLOCK -->
+      </div>
+      <div class="semester-summary">
+        <div class="summary-item">
+          <div class="summary-label">Semester GPA</div>
+          <div class="summary-value">{SEMESTER_GPA}</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-label">Standing</div>
+          <div class="summary-value">{STANDING}</div>
+        </div>
+      </div>
+    </div>
+    <!-- END:SEMESTER_BLOCK -->
+
+    <div class="cumulative-section">
+      <div class="cumulative-title">Cumulative Summary</div>
+      <div class="cumulative-stats">
+        <div class="stat-item">
+          <span class="stat-label">Cumulative GPA:</span>
+          <span class="stat-value">{CUMULATIVE_GPA}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Total Credits:</span>
+          <span class="stat-value">{TOTAL_CREDITS}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
