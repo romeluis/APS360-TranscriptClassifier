@@ -44,25 +44,21 @@ class BaselineModel(NERModel):
 
 
 class MLModel(NERModel):
-    """Placeholder for the future BERT-based NER model.
-
-    To implement:
-        1. Load a saved model checkpoint and tokenizer in __init__
-        2. Implement predict() to tokenize, run inference, and map
-           sub-word predictions back to whitespace-token BIO tags
-        3. Register the class in MODEL_REGISTRY below
-    """
+    """BERT-based NER model for transcript entity extraction."""
 
     name = "BERT NER"
 
     def __init__(self, model_path: str | None = None):
-        raise NotImplementedError(
-            "ML model not yet implemented. "
-            "Subclass NERModel and register in MODEL_REGISTRY."
-        )
+        import sys
+        sys.path.insert(0, str(_PROJECT_ROOT))
+        from model.predict import BertNERPredictor
+        from model.config import BEST_CHECKPOINT_DIR
+
+        checkpoint = model_path or str(_PROJECT_ROOT / BEST_CHECKPOINT_DIR)
+        self._predictor = BertNERPredictor(checkpoint_dir=checkpoint)
 
     def predict(self, tokens: list[str]) -> list[str]:
-        raise NotImplementedError
+        return self._predictor.predict(tokens)
 
 
 # ---------------------------------------------------------------------------
@@ -71,7 +67,7 @@ class MLModel(NERModel):
 
 MODEL_REGISTRY: dict[str, type[NERModel]] = {
     "baseline": BaselineModel,
-    # "bert": MLModel,  # Uncomment when implemented
+    "bert": MLModel,
 }
 
 

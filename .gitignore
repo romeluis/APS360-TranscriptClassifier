@@ -208,3 +208,8 @@ __marimo__/
 transcript_generator/.DS_Store
 /transcript_generator/output
 transcript_generator/TEMPLATE_GENERATION_INSTRUCTION.md
+
+# Model checkpoints (large binary files)
+model/checkpoints/
+model/logs/
+model/split_info.json
