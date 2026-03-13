@@ -149,12 +149,19 @@ def generate_course_code(config):
         return dept, f"{dept}{level}"
 
 
-def generate_course_name(dept):
-    """Pick a random course name for the given department."""
-    if dept in COURSE_NAMES:
-        return random.choice(COURSE_NAMES[dept])
-    # Fallback for unknown departments
-    all_names = [n for names in COURSE_NAMES.values() for n in names]
+def generate_course_name(dept, course_pool=None):
+    """Pick a random course name for the given department.
+
+    Args:
+        dept: department abbreviation (e.g. "CSC")
+        course_pool: optional restricted dict mapping dept -> list[str].
+            If None, uses the global COURSE_NAMES pool.
+    """
+    pool = course_pool if course_pool is not None else COURSE_NAMES
+    if dept in pool and pool[dept]:
+        return random.choice(pool[dept])
+    # Fallback: sample from all names in the given pool
+    all_names = [n for names in pool.values() for n in names]
     return random.choice(all_names)
 
 
@@ -220,9 +227,14 @@ def generate_student_info(config):
 
 # ---------- Full transcript generation ----------
 
-def generate_transcript_data(config):
+def generate_transcript_data(config, course_pool=None):
     """
     Generate all random data for one transcript.
+
+    Args:
+        config: template configuration dict
+        course_pool: optional restricted course name pool (dept -> list[str]).
+            If None, uses the global COURSE_NAMES pool.
 
     Returns a dict with:
       - student_info: dict of non-entity tag values
@@ -255,7 +267,7 @@ def generate_transcript_data(config):
                     used_codes.add(code)
                     break
 
-            name = generate_course_name(dept)
+            name = generate_course_name(dept, course_pool=course_pool)
             grade_display, gpa_points = generate_grade(config)
             credits = random.choice(credit_values)
 

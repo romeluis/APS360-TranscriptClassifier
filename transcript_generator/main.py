@@ -3,19 +3,75 @@
 import argparse
 import json
 import os
+import random
 import sys
 import time
 from collections import Counter
 from pathlib import Path
 
 from template_parser import parse_template
-from generators import generate_transcript_data
+from generators import COURSE_NAMES, generate_transcript_data
 from assembler import assemble
 from label_extractor import extract_labels, validate_bio_labels
 from pdf_renderer import render_pdf
 
+# Match model/config.py constants so pool assignment is consistent with data_split.py
+_TRAIN_RATIO = 0.60
+_VAL_RATIO = 0.20
+_SEED = 42
 
-def generate_for_template(template_path, count, output_dir):
+
+def split_course_pool(seed=_SEED, test_ratio=0.30):
+    """Split COURSE_NAMES into train/val and test sub-pools.
+
+    Each department's names are split independently, then a global dedup pass
+    removes any names that ended up in both pools (can happen when the same
+    name appears under multiple departments).
+
+    Args:
+        seed: RNG seed for reproducibility
+        test_ratio: fraction of names per department reserved for test
+
+    Returns:
+        (train_pool, test_pool) — each is a dict mapping dept -> list[str],
+        with strictly disjoint name sets across both pools.
+    """
+    rng = random.Random(seed)
+    train_pool, test_pool = {}, {}
+    for dept, names in COURSE_NAMES.items():
+        shuffled = list(names)
+        rng.shuffle(shuffled)
+        n_test = max(1, round(len(shuffled) * test_ratio))
+        test_pool[dept] = shuffled[:n_test]
+        train_pool[dept] = shuffled[n_test:]
+
+    # Remove cross-department overlap: any name in test_pool wins over train_pool
+    test_names = {n for v in test_pool.values() for n in v}
+    train_pool = {
+        dept: [n for n in names if n not in test_names]
+        for dept, names in train_pool.items()
+    }
+    return train_pool, test_pool
+
+
+def get_test_template_names(templates_dir, train_ratio=_TRAIN_RATIO, val_ratio=_VAL_RATIO, seed=_SEED):
+    """Pre-compute which template stems are assigned to the test split.
+
+    Mirrors the shuffle + slice logic in model/data_split.py so the course
+    pool assignment at generation time matches the downstream split.
+
+    Returns:
+        set of template stem strings that belong to the test split
+    """
+    stems = sorted(p.stem for p in Path(templates_dir).glob("*.html"))
+    rng = random.Random(seed)
+    rng.shuffle(stems)
+    n = len(stems)
+    n_train_val = round(n * train_ratio) + round(n * val_ratio)
+    return set(stems[n_train_val:])
+
+
+def generate_for_template(template_path, count, output_dir, course_pool=None):
     """
     Generate `count` transcripts from a single template.
 
@@ -37,7 +93,7 @@ def generate_for_template(template_path, count, output_dir):
         transcript_id = f"{template_name}_{i:03d}"
 
         # Generate random data
-        data = generate_transcript_data(config)
+        data = generate_transcript_data(config, course_pool=course_pool)
 
         # Assemble HTML
         html_string = assemble(raw_html, config, blocks, data)
@@ -115,6 +171,15 @@ def main():
         default="output",
         help="Output directory (default: output/).",
     )
+    parser.add_argument(
+        "--split-courses",
+        action="store_true",
+        help=(
+            "Assign disjoint course name pools to train/val vs. test templates. "
+            "Test templates receive course names never seen in training, "
+            "preventing the model from memorizing specific names."
+        ),
+    )
     args = parser.parse_args()
 
     if not args.template and not args.all_templates:
@@ -141,6 +206,22 @@ def main():
             tp = script_dir / tp
         template_paths = [tp]
 
+    # Optionally assign disjoint course name pools to train/val vs. test templates
+    train_pool = test_pool = None
+    test_template_names = set()
+    if args.split_courses:
+        templates_dir = script_dir / "templates"
+        test_template_names = get_test_template_names(templates_dir)
+        train_pool, test_pool = split_course_pool()
+        train_name_count = sum(len(v) for v in train_pool.values())
+        test_name_count = sum(len(v) for v in test_pool.values())
+        print(
+            f"\nCourse pool split enabled:\n"
+            f"  Train/val pool: {train_name_count} names across {len(train_pool)} depts\n"
+            f"  Test pool:      {test_name_count} names across {len(test_pool)} depts\n"
+            f"  Test templates: {sorted(test_template_names)}\n"
+        )
+
     # Generate transcripts
     all_files = []
     total_label_counts = Counter()
@@ -148,8 +229,14 @@ def main():
 
     for template_path in template_paths:
         print(f"\nProcessing template: {template_path.name}")
+        course_pool = None
+        if args.split_courses:
+            is_test = template_path.stem in test_template_names
+            course_pool = test_pool if is_test else train_pool
+            pool_label = "test" if is_test else "train/val"
+            print(f"  Course pool: {pool_label}")
         files, label_counts = generate_for_template(
-            str(template_path), args.count, str(output_dir)
+            str(template_path), args.count, str(output_dir), course_pool=course_pool
         )
         all_files.extend(files)
         total_label_counts.update(label_counts)
