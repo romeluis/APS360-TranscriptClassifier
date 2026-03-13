@@ -13,7 +13,12 @@ from template_parser import parse_template
 from generators import COURSE_NAMES, generate_transcript_data
 from assembler import assemble
 from label_extractor import extract_labels, validate_bio_labels
-from pdf_renderer import render_pdf
+
+try:
+    from pdf_renderer import render_pdf
+    _PDF_AVAILABLE = True
+except Exception:
+    _PDF_AVAILABLE = False
 
 # Match model/config.py constants so pool assignment is consistent with data_split.py
 _TRAIN_RATIO = 0.60
@@ -71,7 +76,7 @@ def get_test_template_names(templates_dir, train_ratio=_TRAIN_RATIO, val_ratio=_
     return set(stems[n_train_val:])
 
 
-def generate_for_template(template_path, count, output_dir, course_pool=None):
+def generate_for_template(template_path, count, output_dir, course_pool=None, render_pdf_files=True):
     """
     Generate `count` transcripts from a single template.
 
@@ -98,9 +103,10 @@ def generate_for_template(template_path, count, output_dir, course_pool=None):
         # Assemble HTML
         html_string = assemble(raw_html, config, blocks, data)
 
-        # Render PDF
+        # Render PDF (optional — not needed for ML training)
         pdf_path = template_output_dir / f"transcript_{i:03d}.pdf"
-        render_pdf(html_string, str(pdf_path))
+        if render_pdf_files and _PDF_AVAILABLE:
+            render_pdf(html_string, str(pdf_path))
 
         # Extract BIO labels
         tokens, labels = extract_labels(html_string)
@@ -180,6 +186,11 @@ def main():
             "preventing the model from memorizing specific names."
         ),
     )
+    parser.add_argument(
+        "--no-pdf",
+        action="store_true",
+        help="Skip PDF rendering (WeasyPrint). JSON files are sufficient for ML training.",
+    )
     args = parser.parse_args()
 
     if not args.template and not args.all_templates:
@@ -236,7 +247,8 @@ def main():
             pool_label = "test" if is_test else "train/val"
             print(f"  Course pool: {pool_label}")
         files, label_counts = generate_for_template(
-            str(template_path), args.count, str(output_dir), course_pool=course_pool
+            str(template_path), args.count, str(output_dir),
+            course_pool=course_pool, render_pdf_files=not args.no_pdf
         )
         all_files.extend(files)
         total_label_counts.update(label_counts)
