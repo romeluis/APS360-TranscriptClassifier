@@ -212,3 +212,5 @@ transcript_generator/TEMPLATE_GENERATION_INSTRUCTION.md
 model/checkpoints/
 model/logs/
 model/split_info.json
+
+transcript_generator/output/
