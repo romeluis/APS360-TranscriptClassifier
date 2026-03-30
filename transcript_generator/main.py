@@ -7,6 +7,7 @@ import random
 import sys
 import time
 from collections import Counter
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 from template_parser import parse_template
@@ -19,6 +20,18 @@ try:
     _PDF_AVAILABLE = True
 except Exception:
     _PDF_AVAILABLE = False
+
+try:
+    from pdf_aligner import extract_pdf_labels
+    _PDF_ALIGNER_AVAILABLE = True
+except Exception:
+    _PDF_ALIGNER_AVAILABLE = False
+
+try:
+    from noise_augmenter import augment_tokens
+    _NOISE_AUGMENTER_AVAILABLE = True
+except Exception:
+    _NOISE_AUGMENTER_AVAILABLE = False
 
 # Match model/config.py constants so pool assignment is consistent with data_split.py
 _TRAIN_RATIO = 0.60
@@ -76,9 +89,29 @@ def get_test_template_names(templates_dir, train_ratio=_TRAIN_RATIO, val_ratio=_
     return set(stems[n_train_val:])
 
 
-def generate_for_template(template_path, count, output_dir, course_pool=None, render_pdf_files=True):
+def generate_for_template(
+    template_path,
+    count,
+    output_dir,
+    course_pool=None,
+    render_pdf_files=True,
+    pdf_extract=False,
+    augment_noise=False,
+    noise_intensity=1.0,
+):
     """
     Generate `count` transcripts from a single template.
+
+    Args:
+        template_path: path to the HTML template file
+        count: number of transcripts to generate
+        output_dir: root output directory
+        course_pool: optional course name pool (for split-courses mode)
+        render_pdf_files: whether to keep rendered PDFs on disk
+        pdf_extract: if True, extract BIO labels from rendered PDF text
+                     instead of clean HTML text (requires WeasyPrint + pypdf)
+        augment_noise: if True, apply token-level noise augmentation
+        noise_intensity: scales augmentation probabilities (0=off, 1=default)
 
     Returns:
         list of {"pdf": relative_path, "json": relative_path} dicts
@@ -93,6 +126,7 @@ def generate_for_template(template_path, count, output_dir, course_pool=None, re
     files = []
     label_counts = Counter()
     total_errors = 0
+    alignment_stats = []
 
     for i in range(1, count + 1):
         transcript_id = f"{template_name}_{i:03d}"
@@ -103,32 +137,54 @@ def generate_for_template(template_path, count, output_dir, course_pool=None, re
         # Assemble HTML
         html_string = assemble(raw_html, config, blocks, data)
 
-        # Render PDF (optional — not needed for ML training)
+        # Render PDF — required for pdf_extract, optional otherwise
         pdf_path = template_output_dir / f"transcript_{i:03d}.pdf"
-        if render_pdf_files and _PDF_AVAILABLE:
+        need_pdf = pdf_extract or (render_pdf_files and _PDF_AVAILABLE)
+        if need_pdf and _PDF_AVAILABLE:
             render_pdf(html_string, str(pdf_path))
 
         # Extract BIO labels
-        tokens, labels = extract_labels(html_string)
+        extraction_mode = "html"
+        alignment_coverage = None
+
+        if pdf_extract and _PDF_ALIGNER_AVAILABLE and pdf_path.exists():
+            tokens, labels, stats = extract_pdf_labels(html_string, str(pdf_path))
+            extraction_mode = stats["extraction_mode"]
+            alignment_coverage = stats["alignment_coverage"]
+            alignment_stats.append(stats)
+        else:
+            tokens, labels = extract_labels(html_string)
+
+        # Optional noise augmentation
+        if augment_noise and _NOISE_AUGMENTER_AVAILABLE:
+            rng = random.Random(hash((template_name, i)))
+            tokens, labels = augment_tokens(tokens, labels, rng, intensity=noise_intensity)
 
         # Validate labels
         errors = validate_bio_labels(tokens, labels)
         if errors:
             total_errors += len(errors)
-            print(f"  WARNING: {transcript_id} has {len(errors)} label errors:")
-            for err in errors[:3]:
-                print(f"    - {err}")
+
+        # Clean up intermediate PDF if not explicitly requested
+        if pdf_extract and not render_pdf_files and pdf_path.exists():
+            pdf_path.unlink()
 
         # Write JSON
+        metadata = {
+            "template_id": template_name,
+            "transcript_id": transcript_id,
+            "num_semesters": len(data["semesters"]),
+            "num_courses": sum(len(s["courses"]) for s in data["semesters"]),
+        }
+        if pdf_extract:
+            metadata["extraction_mode"] = extraction_mode
+            if alignment_coverage is not None:
+                metadata["alignment_coverage"] = alignment_coverage
+
         json_data = {
             "tokens": tokens,
             "ner_tags": labels,
-            "metadata": {
-                "template_id": template_name,
-                "transcript_id": transcript_id,
-                "num_semesters": len(data["semesters"]),
-                "num_courses": sum(len(s["courses"]) for s in data["semesters"]),
-            },
+            "metadata": metadata,
         }
         json_path = template_output_dir / f"transcript_{i:03d}.json"
         with open(json_path, "w", encoding="utf-8") as f:
@@ -141,14 +197,29 @@ def generate_for_template(template_path, count, output_dir, course_pool=None, re
             "json": str(json_path.relative_to(output_dir)),
         })
 
-        # Progress
-        if i % 10 == 0 or i == count:
-            print(f"  [{template_name}] {i}/{count} transcripts generated")
-
+    # Template-level summary (safe for parallel workers — one print per template)
+    status_parts = [f"  [{template_name}] {count} transcripts"]
+    if pdf_extract and alignment_stats:
+        coverages = [s["alignment_coverage"] for s in alignment_stats]
+        mean_cov = sum(coverages) / len(coverages)
+        fallbacks = sum(1 for s in alignment_stats if s["extraction_mode"] == "html_fallback")
+        status_parts.append(f"alignment={mean_cov:.1%}")
+        if fallbacks:
+            status_parts.append(f"fallbacks={fallbacks}")
     if total_errors > 0:
-        print(f"  WARNING: {total_errors} total BIO label errors in {template_name}")
+        status_parts.append(f"BIO_errors={total_errors}")
+    print(" | ".join(status_parts))
 
     return files, label_counts
+
+
+# ---------------------------------------------------------------------------
+# Parallel wrapper
+# ---------------------------------------------------------------------------
+
+def _worker_generate(kwargs):
+    """Top-level function for ProcessPoolExecutor (must be picklable)."""
+    return generate_for_template(**kwargs)
 
 
 def main():
@@ -191,10 +262,48 @@ def main():
         action="store_true",
         help="Skip PDF rendering (WeasyPrint). JSON files are sufficient for ML training.",
     )
+    parser.add_argument(
+        "--pdf-extract",
+        action="store_true",
+        help=(
+            "Extract BIO labels from rendered PDF text (via pypdf) instead of "
+            "clean HTML text. Trains the model on realistic noisy input. "
+            "Requires WeasyPrint and pypdf."
+        ),
+    )
+    parser.add_argument(
+        "--augment-noise",
+        action="store_true",
+        help="Apply token-level noise augmentation to training data.",
+    )
+    parser.add_argument(
+        "--noise-intensity",
+        type=float,
+        default=1.0,
+        help="Scale noise augmentation probabilities (default: 1.0).",
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help=(
+            "Number of parallel worker processes for template generation. "
+            "Default: 1 (sequential). Use 0 for os.cpu_count()."
+        ),
+    )
     args = parser.parse_args()
 
     if not args.template and not args.all_templates:
         parser.error("Must specify --template or --all-templates")
+
+    if args.pdf_extract and not _PDF_AVAILABLE:
+        parser.error("--pdf-extract requires WeasyPrint. Install with: pip install weasyprint")
+
+    if args.pdf_extract and not _PDF_ALIGNER_AVAILABLE:
+        parser.error("--pdf-extract requires pdf_aligner module (and pypdf).")
+
+    if args.augment_noise and not _NOISE_AUGMENTER_AVAILABLE:
+        parser.error("--augment-noise requires noise_augmenter module.")
 
     # Resolve paths relative to this script's directory
     script_dir = Path(__file__).parent
@@ -233,25 +342,55 @@ def main():
             f"  Test templates: {sorted(test_template_names)}\n"
         )
 
-    # Generate transcripts
-    all_files = []
-    total_label_counts = Counter()
-    start_time = time.time()
-
+    # Build per-template kwargs
+    task_kwargs_list = []
     for template_path in template_paths:
-        print(f"\nProcessing template: {template_path.name}")
         course_pool = None
         if args.split_courses:
             is_test = template_path.stem in test_template_names
             course_pool = test_pool if is_test else train_pool
-            pool_label = "test" if is_test else "train/val"
-            print(f"  Course pool: {pool_label}")
-        files, label_counts = generate_for_template(
-            str(template_path), args.count, str(output_dir),
-            course_pool=course_pool, render_pdf_files=not args.no_pdf
-        )
-        all_files.extend(files)
-        total_label_counts.update(label_counts)
+
+        task_kwargs_list.append({
+            "template_path": str(template_path),
+            "count": args.count,
+            "output_dir": str(output_dir),
+            "course_pool": course_pool,
+            "render_pdf_files": not args.no_pdf or args.pdf_extract,
+            "pdf_extract": args.pdf_extract,
+            "augment_noise": args.augment_noise,
+            "noise_intensity": args.noise_intensity,
+        })
+
+    # Generate transcripts (parallel or sequential)
+    num_workers = args.workers
+    if num_workers == 0:
+        num_workers = os.cpu_count() or 4
+    num_workers = min(num_workers, len(task_kwargs_list))
+
+    all_files = []
+    total_label_counts = Counter()
+    start_time = time.time()
+
+    if num_workers > 1:
+        print(f"Running with {num_workers} parallel workers...\n")
+        with ProcessPoolExecutor(max_workers=num_workers) as pool:
+            futures = {
+                pool.submit(_worker_generate, kw): kw["template_path"]
+                for kw in task_kwargs_list
+            }
+            for future in as_completed(futures):
+                template_path = futures[future]
+                try:
+                    files, label_counts = future.result()
+                    all_files.extend(files)
+                    total_label_counts.update(label_counts)
+                except Exception as exc:
+                    print(f"  ERROR: {Path(template_path).name} failed: {exc}")
+    else:
+        for kw in task_kwargs_list:
+            files, label_counts = generate_for_template(**kw)
+            all_files.extend(files)
+            total_label_counts.update(label_counts)
 
     elapsed = time.time() - start_time
 

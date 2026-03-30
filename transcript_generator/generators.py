@@ -3,6 +3,7 @@
 import json
 import math
 import random
+import re
 import os
 from pathlib import Path
 from faker import Faker
@@ -99,6 +100,149 @@ STANDINGS = [
 ]
 
 
+# ---------- Course name transforms (real transcripts are messy!) ----------
+
+# Multi-word phrases to abbreviate (checked FIRST, before single words)
+_PHRASE_ABBREVIATIONS = {
+    "Introduction to": ["INTRO. TO", "Intro to", "INTRO.TO", "INTRO. TO"],
+    "Strategies and Practice": ["STRAT.& PRACTICE", "STRAT. & PRACT."],
+    "Engineering Economics Analysis": ["ENG.ECO.ANA.", "ENG. ECO. ANA."],
+    "Design and Communication": ["DESIGN & COMM.", "DESIGN AND COMM."],
+    "Probability and Applications": ["PROB. & APP.", "PROB. & APPLIC."],
+    "Electromagnetic Fields": ["ELE.&MAGNET.FIELDS", "ELECTROMAGNET. FIELDS"],
+}
+
+# Common word abbreviations found on real university transcripts
+_ABBREVIATIONS = {
+    "Introduction": ["INTRO.", "Intro"],
+    "Engineering": ["ENG.", "ENGIN.", "Eng."],
+    "Applied": ["APP.", "App."],
+    "Application": ["APP.", "App."],
+    "Applications": ["APP.", "APPLIC."],
+    "Fundamentals": ["FUND.", "Fund."],
+    "Fundamental": ["FUND.", "Fund."],
+    "Management": ["MGMT.", "Mgmt."],
+    "Organization": ["ORG.", "Org."],
+    "Organizational": ["ORG.", "Org."],
+    "Psychology": ["PSYCH.", "Psych."],
+    "Economics": ["ECO.", "ECON.", "Econ."],
+    "Economic": ["ECO.", "ECON."],
+    "Analysis": ["ANA.", "ANAL."],
+    "Electrical": ["ELECT.", "ELEC.", "Elec."],
+    "Electronic": ["ELECTRON.", "Elect."],
+    "Electronics": ["ELECTRON.", "Elect."],
+    "Electromagnetic": ["ELECTROMAGNET.", "ELE.&MAGNET."],
+    "Computer": ["COMP.", "Comp."],
+    "Computing": ["COMP.", "Comput."],
+    "Computation": ["COMP.", "Comput."],
+    "Science": ["SCI.", "Sci."],
+    "Sciences": ["SCI.", "Sci."],
+    "Communication": ["COMM.", "Comm."],
+    "Communications": ["COMM.", "Comms."],
+    "Entrepreneurship": ["ENTRE.", "Entrep."],
+    "Mathematics": ["MATH.", "Math."],
+    "Mathematical": ["MATH.", "Math."],
+    "Laboratory": ["LAB.", "Lab."],
+    "Technology": ["TECH.", "Tech."],
+    "Seminar": ["SEM.", "SEM:", "Sem."],
+    "Environment": ["ENVIRON.", "Env."],
+    "Environmental": ["ENVIRON.", "Env."],
+    "Professional": ["PROF.", "Prof."],
+    "Systems": ["SYS.", "Sys."],
+    "Probability": ["PROB.", "Prob."],
+    "Statistics": ["STAT.", "Stats."],
+    "Statistical": ["STAT.", "Stat."],
+    "Behaviour": ["BEHAV.", "Behav."],
+    "Behavior": ["BEHAV.", "Behav."],
+    "Information": ["INFO.", "Info."],
+    "Programming": ["PROG.", "Prog."],
+    "Philosophy": ["PHIL.", "Phil."],
+    "Strategies": ["STRAT.", "Strat."],
+    "Materials": ["MATER.", "Mat."],
+    "Practice": ["PRACT.", "Pract."],
+    "Physiology": ["PHYSIOL.", "Physiol."],
+    "Physiological": ["PHYSIOL.", "Physiol."],
+    "Modelling": ["MODEL.", "Model."],
+    "Modeling": ["MODEL.", "Model."],
+    "Architecture": ["ARCH.", "Arch."],
+    "Accounting": ["ACCT.", "Acct."],
+    "Chemistry": ["CHEM.", "Chem."],
+    "Biology": ["BIOL.", "Biol."],
+    "Biological": ["BIOL.", "Biol."],
+    "Sociology": ["SOCIOL.", "Sociol."],
+    "Anthropology": ["ANTHRO.", "Anthro."],
+}
+
+# Roman numeral equivalents
+_ROMAN_NUMERALS = {"1": "I", "2": "II", "3": "III", "4": "IV"}
+_ARABIC_FROM_ROMAN = {"I": "1", "II": "2", "III": "3", "IV": "4"}
+
+
+def transform_course_name(name):
+    """Randomly transform a clean course name to look like a real transcript.
+
+    Applies some combination of:
+      - ALL CAPS conversion  (~40%)
+      - Word abbreviation    (~35%)
+      - "and" -> "&"         (~50%)
+      - Number/Roman numeral swapping (~50%)
+      - Period-space removal in abbreviations (~30%)
+    """
+    result = name
+
+    # Decide transforms
+    do_caps = random.random() < 0.40
+    do_abbrev = random.random() < 0.35
+    do_ampersand = random.random() < 0.50
+    do_numeral_swap = random.random() < 0.50
+
+    # Abbreviate (before caps, so case variants work)
+    if do_abbrev:
+        # Phase 1: Try phrase-level abbreviations first
+        for phrase, replacements in _PHRASE_ABBREVIATIONS.items():
+            if phrase in result and random.random() < 0.5:
+                result = result.replace(phrase, random.choice(replacements), 1)
+
+        # Phase 2: Abbreviate individual words
+        words_in_name = result.split()
+        abbrev_budget = random.randint(1, max(1, len(words_in_name) // 2))
+        abbrevs_done = 0
+        for word in list(words_in_name):
+            if abbrevs_done >= abbrev_budget:
+                break
+            clean_word = word.rstrip(",;:")
+            if clean_word in _ABBREVIATIONS:
+                replacement = random.choice(_ABBREVIATIONS[clean_word])
+                result = result.replace(word, replacement, 1)
+                abbrevs_done += 1
+
+    # Replace "and" with "&"
+    if do_ampersand:
+        result = re.sub(r'\band\b', '&', result)
+        result = re.sub(r'\bAND\b', '&', result)
+
+    # Swap roman numerals <-> arabic numbers
+    if do_numeral_swap:
+        # Replace trailing roman numerals with arabic or vice versa
+        for roman, arabic in _ARABIC_FROM_ROMAN.items():
+            pattern = r'\b' + roman + r'\b'
+            if re.search(pattern, result) and random.random() < 0.5:
+                result = re.sub(pattern, arabic, result)
+        for arabic, roman in _ROMAN_NUMERALS.items():
+            if result.endswith(f" {arabic}") and random.random() < 0.5:
+                result = result[:-len(arabic)] + roman
+
+    # ALL CAPS
+    if do_caps:
+        result = result.upper()
+
+    # Sometimes remove space after period in abbreviations (e.g., "INTRO. TO" -> "INTRO.TO")
+    if random.random() < 0.30:
+        result = re.sub(r'\. ([A-Z&])', r'.\1', result)
+
+    return result
+
+
 # ---------- Config defaults ----------
 
 DEFAULT_CONFIG = {
@@ -152,6 +296,9 @@ def generate_course_code(config):
 def generate_course_name(dept, course_pool=None):
     """Pick a random course name for the given department.
 
+    Randomly applies abbreviation/caps transforms to simulate the way
+    real university transcripts display course names.
+
     Args:
         dept: department abbreviation (e.g. "CSC")
         course_pool: optional restricted dict mapping dept -> list[str].
@@ -159,10 +306,12 @@ def generate_course_name(dept, course_pool=None):
     """
     pool = course_pool if course_pool is not None else COURSE_NAMES
     if dept in pool and pool[dept]:
-        return random.choice(pool[dept])
-    # Fallback: sample from all names in the given pool
-    all_names = [n for names in pool.values() for n in names]
-    return random.choice(all_names)
+        name = random.choice(pool[dept])
+    else:
+        # Fallback: sample from all names in the given pool
+        all_names = [n for names in pool.values() for n in names]
+        name = random.choice(all_names)
+    return transform_course_name(name)
 
 
 def generate_grade(config):

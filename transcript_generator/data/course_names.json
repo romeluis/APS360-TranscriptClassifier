@@ -684,5 +684,146 @@
     "Religion and Politics",
     "Mysticism and Spirituality",
     "New Religious Movements"
+  ],
+  "APS": [
+    "Orientation to Engineering",
+    "Engineering Chemistry and Materials Science",
+    "Engineering Strategies and Practice I",
+    "Engineering Strategies and Practice II",
+    "Computer Fundamentals",
+    "Engineering Communication",
+    "Foundations of Deep Learning",
+    "Applied Fundamentals of Machine Learning",
+    "Engineering Economics",
+    "Technical Writing for Engineers",
+    "Professional Engineering Practice",
+    "Engineering Design"
+  ],
+  "MIE": [
+    "Dynamics",
+    "Mechanics of Solids",
+    "Thermodynamics",
+    "Fluid Mechanics",
+    "Engineering Design",
+    "Manufacturing Engineering",
+    "Operations Research",
+    "Industrial Engineering",
+    "Systems Modelling and Simulation",
+    "Quality Control and Reliability",
+    "Human Factors Engineering",
+    "Supply Chain Engineering"
+  ],
+  "BME": [
+    "Biomedical Engineering Fundamentals",
+    "Physiological Control Systems",
+    "Biomechanics",
+    "Biomedical Instrumentation",
+    "Medical Imaging",
+    "Biomaterials",
+    "Neural Engineering",
+    "Clinical Engineering",
+    "Tissue Engineering",
+    "Biomedical Signal Processing"
+  ],
+  "JRE": [
+    "People Management and Organizational Behaviour",
+    "Markets and Competitive Strategy",
+    "Entrepreneurship and Small Business",
+    "Engineering Economics Analysis",
+    "Technology Entrepreneurship",
+    "Financial Engineering",
+    "Innovation and Design Thinking",
+    "Technical Entrepreneurship"
+  ],
+  "TEP": [
+    "Positive Psychology for Engineers",
+    "Leadership and Communication",
+    "Global Engineering",
+    "Science and Technology Policy",
+    "Ethics in Engineering",
+    "Intercultural Communication",
+    "Cognitive Psychology for Design",
+    "Technology and Society"
+  ],
+  "SPA": [
+    "Academic Spanish",
+    "Intermediate Spanish",
+    "Advanced Spanish Composition",
+    "Spanish Culture and Society",
+    "Business Spanish",
+    "Spanish Literature",
+    "Conversational Spanish",
+    "Spanish for Health Professionals"
+  ],
+  "ENV": [
+    "Introduction to Environment",
+    "Environmental Science",
+    "Climate Change and Society",
+    "Environmental Policy and Governance",
+    "Sustainability Science",
+    "Environmental Health",
+    "Conservation Ecology",
+    "Environmental Risk Assessment"
+  ],
+  "PEY": [
+    "Professional Experience Year Co-op",
+    "Professional Experience Year Internship",
+    "Industrial Internship"
+  ],
+  "FRE": [
+    "Academic French",
+    "Intermediate French",
+    "Advanced French Composition",
+    "French Culture and Society",
+    "Business French"
+  ],
+  "ESC": [
+    "Engineering Science Seminar",
+    "Praxis",
+    "Engineering Mathematics",
+    "Engineering Science Design",
+    "Systems Design"
+  ],
+  "CHE": [
+    "Chemical Engineering Fundamentals",
+    "Process Dynamics and Control",
+    "Chemical Reaction Engineering",
+    "Transport Phenomena",
+    "Separation Processes",
+    "Chemical Plant Design",
+    "Biochemical Engineering",
+    "Polymer Processing"
+  ],
+  "MSE": [
+    "Structure and Properties of Materials",
+    "Thermodynamics of Materials",
+    "Kinetics of Materials",
+    "Electronic Properties of Materials",
+    "Mechanical Properties of Materials",
+    "Corrosion and Degradation"
+  ],
+  "ROB": [
+    "Robot Modeling and Control",
+    "Autonomous Robots",
+    "Robot Vision",
+    "Motion Planning",
+    "Human-Robot Interaction",
+    "Robotic Manipulation"
+  ],
+  "AER": [
+    "Aerodynamics",
+    "Flight Dynamics",
+    "Aerospace Structures",
+    "Propulsion Systems",
+    "Space Vehicle Design",
+    "Aircraft Design"
+  ],
+  "MIN": [
+    "Mining Engineering Fundamentals",
+    "Rock Mechanics",
+    "Mine Planning and Design",
+    "Mineral Processing",
+    "Underground Mining",
+    "Surface Mining Operations"
   ]
 }

@@ -90,13 +90,18 @@ def train(
     weight_decay: float = WEIGHT_DECAY,
     seed: int = SEED,
     use_fp16: bool = True,
-    log_every: int = 10,
+    log_every: int = 5,
 ) -> dict:
     """Full training pipeline. Returns training history dict."""
 
     _set_seed(seed)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    use_fp16 = use_fp16 and device.type == "cuda"
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        device = torch.device("mps")
+    else:
+        device = torch.device("cpu")
+    use_fp16 = use_fp16 and device.type == "cuda"  # FP16 only on CUDA
     print(f"Device: {device}  |  FP16: {use_fp16}")
 
     # ── Data ──────────────────────────────────────────────────────────
@@ -178,7 +183,7 @@ def train(
     patience_counter = 0
     best_dir = str(Path(output_dir) / "best")
 
-    print(f"\nTraining for {num_epochs} epochs ({total_steps} steps)...\n")
+    print(f"\nTraining for {num_epochs} epochs ({total_steps} steps)...\n", flush=True)
 
     for epoch in range(1, num_epochs + 1):
         epoch_start = time.time()
@@ -212,9 +217,9 @@ def train(
             running_loss += loss.item()
             step_count += 1
 
-            if step % log_every == 0:
+            if step % log_every == 0 or step == 1:
                 avg = running_loss / step_count
-                print(f"  Epoch {epoch} step {step}/{len(train_loader)}  loss={avg:.4f}")
+                print(f"  Epoch {epoch} step {step}/{len(train_loader)}  loss={avg:.4f}", flush=True)
 
         train_loss = running_loss / step_count
         history["train_loss"].append(train_loss)
@@ -267,7 +272,8 @@ def train(
             f"val_loss={val_loss:.4f}  "
             f"val_acc={val_acc:.4f}  "
             f"val_f1={val_f1:.4f}  "
-            f"({elapsed:.1f}s)"
+            f"({elapsed:.1f}s)",
+            flush=True,
         )
 
         # ── Checkpointing ────────────────────────────────────────────
@@ -277,11 +283,12 @@ def train(
             Path(best_dir).mkdir(parents=True, exist_ok=True)
             model.save_pretrained(best_dir)
             tokenizer.save_pretrained(best_dir)
-            print(f"  ↑ New best model saved (F1={best_f1:.4f})")
+            print(f"  ↑ New best model saved (F1={best_f1:.4f})", flush=True)
         else:
             patience_counter += 1
+            print(f"  No improvement (patience {patience_counter}/{EARLY_STOPPING_PATIENCE})", flush=True)
             if patience_counter >= EARLY_STOPPING_PATIENCE:
-                print(f"  Early stopping triggered (patience={EARLY_STOPPING_PATIENCE})")
+                print(f"  Early stopping triggered (patience={EARLY_STOPPING_PATIENCE})", flush=True)
                 break
 
     # ── Save history ──────────────────────────────────────────────────
