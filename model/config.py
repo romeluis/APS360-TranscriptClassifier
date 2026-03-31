@@ -30,7 +30,7 @@ STRIDE = 128          # overlap for sliding-window on long transcripts
 
 # ── Training hyperparameters ──────────────────────────────────────────────
 
-BATCH_SIZE = 16
+BATCH_SIZE = 32   # A100 (40GB) can run 32 comfortably; drop to 16 for T4
 LEARNING_RATE = 3e-5
 NUM_EPOCHS = 10
 WARMUP_RATIO = 0.1
