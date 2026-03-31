@@ -116,8 +116,12 @@ def train(
         device = torch.device("mps")
     else:
         device = torch.device("cpu")
-    use_fp16 = use_fp16 and device.type == "cuda"  # FP16 only on CUDA
-    print(f"Device: {device}  |  FP16: {use_fp16}")
+    # DeBERTa-v3 has internal FP16 parameters that break GradScaler.
+    # On A100/H100 use bfloat16 instead — same dynamic range as fp32, no scaling needed.
+    # On older GPUs (T4, V100) fall back to fp32 (use_fp16=False).
+    use_fp16 = False  # disabled; we use bf16 autocast below
+    use_bf16 = device.type == "cuda" and torch.cuda.is_bf16_supported()
+    print(f"Device: {device}  |  bf16: {use_bf16}")
 
     # ── Data ──────────────────────────────────────────────────────────
     print("Loading and splitting data...")
@@ -211,7 +215,8 @@ def train(
         optimizer, warmup_steps, total_steps,
     )
 
-    scaler = torch.amp.GradScaler(enabled=use_fp16)
+    # GradScaler is only needed for fp16. bf16 has fp32 dynamic range → no scaling.
+    scaler = torch.amp.GradScaler(enabled=False)
 
     # ── Training loop ─────────────────────────────────────────────────
     history = {
@@ -240,7 +245,7 @@ def train(
             attention_mask = batch["attention_mask"].to(device)
             labels = batch["labels"].to(device)
 
-            with torch.amp.autocast("cuda", enabled=use_fp16):
+            with torch.amp.autocast("cuda", enabled=use_bf16, dtype=torch.bfloat16):
                 # TranscriptNERModel.forward() returns (loss, emissions) in train mode
                 loss, emissions = model(
                     input_ids=input_ids,
@@ -280,7 +285,7 @@ def train(
                 attention_mask = batch["attention_mask"].to(device)
                 labels = batch["labels"].to(device)
 
-                with torch.amp.autocast("cuda", enabled=use_fp16):
+                with torch.amp.autocast("cuda", enabled=use_bf16, dtype=torch.bfloat16):
                     # Inference mode: returns (Viterbi paths, emissions)
                     crf_paths, emissions = model(
                         input_ids=input_ids,
