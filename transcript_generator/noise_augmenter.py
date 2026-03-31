@@ -14,6 +14,12 @@ import string
 _JUNK_FRAGMENTS = [
     "Page", "Continued", "Unofficial", "Official", "Transcript",
     "CONFIDENTIAL", "—", "...", "–", "|",
+    # ACORN-specific junk that appears scattered in real PDFs
+    "PEY", "Co-op", "Program", "May", "proceed",
+    "Sessional", "Cumulative", "Annual", "GPA",
+    "ACORN", "Honour", "Honours", "BASc", "BSc",
+    "Status:", "Pass", "Engin.", "Dept.", "Registrar",
+    "acorn.utoronto.ca", "Academic", "History",
 ]
 
 

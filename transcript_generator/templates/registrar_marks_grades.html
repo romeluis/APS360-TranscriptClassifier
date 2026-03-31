@@ -1,0 +1,220 @@
+<!--CONFIG
+{
+  "grade_scale": "letter",
+  "courses_per_semester": [4, 8],
+  "semesters": [4, 9],
+  "course_code_format": "uoft_style",
+  "has_credits": true,
+  "has_semester_gpa": true,
+  "has_cumulative_gpa": true,
+  "has_standing": true,
+  "credit_values": [0.5, 1.0],
+  "seasons": ["Fall", "Winter", "Summer", "Spring"],
+  "year_range": [2018, 2026]
+}
+-->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @page {
+    size: letter;
+    margin: 2cm 1.5cm 2.5cm 1.5cm;
+    @top-center {
+      content: element(pageHeader);
+    }
+    @bottom-center {
+      content: element(pageFooter);
+    }
+  }
+
+  .page-header {
+    position: running(pageHeader);
+    text-align: center;
+    font-size: 9pt;
+    color: #333;
+    border-bottom: 1px solid #aaa;
+    padding-bottom: 4px;
+  }
+
+  .page-footer {
+    position: running(pageFooter);
+    text-align: center;
+    font-size: 8pt;
+    color: #999;
+  }
+
+  body {
+    font-family: "Times New Roman", Times, serif;
+    font-size: 10pt;
+    color: #111;
+    line-height: 1.4;
+  }
+
+  .title-block {
+    text-align: center;
+    margin-bottom: 14px;
+  }
+  .title-block h1 {
+    font-size: 13pt;
+    margin: 0 0 2px 0;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .title-block h2 {
+    font-size: 11pt;
+    margin: 0;
+    font-weight: normal;
+  }
+
+  .info-table {
+    width: 100%;
+    border: 1px solid #999;
+    border-collapse: collapse;
+    margin-bottom: 14px;
+    font-size: 9.5pt;
+  }
+  .info-table td {
+    padding: 4px 8px;
+    border: 1px solid #ccc;
+  }
+  .info-table .lbl {
+    font-weight: bold;
+    background: #f0f0f0;
+    width: 120px;
+  }
+
+  .semester-heading {
+    font-size: 11pt;
+    font-weight: bold;
+    margin: 16px 0 4px 0;
+    padding: 3px 6px;
+    background: #f0f0f8;
+    border-left: 4px solid #1a1a6c;
+  }
+
+  .session-block {
+    font-size: 9pt;
+    color: #555;
+    margin: 0 0 6px 6px;
+    line-height: 1.5;
+  }
+
+  /* Dense table matching ACORN column order: Code | Title | Wgt | Mrk | Grd | CrsAvg */
+  .course-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9pt;
+    margin-bottom: 6px;
+  }
+  .course-table th {
+    border-top: 1px solid #555;
+    border-bottom: 1px solid #555;
+    padding: 3px 5px;
+    text-align: left;
+    font-size: 8.5pt;
+    white-space: nowrap;
+  }
+  .course-table td {
+    padding: 2px 5px;
+    border-bottom: 1px dotted #ccc;
+  }
+  .course-table .r { text-align: right; }
+  .course-table .c { text-align: center; }
+  .course-table .bold { font-weight: bold; }
+
+  .gpa-summary {
+    font-size: 9pt;
+    font-weight: bold;
+    text-align: right;
+    margin: 2px 0 4px 0;
+    color: #333;
+  }
+
+  .standing-tag {
+    font-size: 8.5pt;
+    font-style: italic;
+    color: #2a6e2a;
+  }
+
+  .final-summary {
+    margin-top: 18px;
+    padding: 10px;
+    border: 2px solid #1a1a6c;
+    font-size: 10pt;
+  }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  {INSTITUTION} | Official Academic Transcript | {ISSUE_DATE}
+</div>
+<div class="page-footer">
+  Student ID: {STUDENT_ID} | Cumulative GPA: {CUMULATIVE_GPA}
+</div>
+
+<div class="title-block">
+  <h1>{INSTITUTION}</h1>
+  <h2>Official Academic Transcript</h2>
+</div>
+
+<table class="info-table">
+  <tr>
+    <td class="lbl">Student Name</td><td>{STUDENT_NAME}</td>
+    <td class="lbl">Student ID</td><td>{STUDENT_ID}</td>
+  </tr>
+  <tr>
+    <td class="lbl">Program</td><td>{PROGRAM}</td>
+    <td class="lbl">Faculty</td><td>{FACULTY}</td>
+  </tr>
+  <tr>
+    <td class="lbl">Date of Birth</td><td>{DOB}</td>
+    <td class="lbl">Issued</td><td>{ISSUE_DATE}</td>
+  </tr>
+</table>
+
+<!-- BEGIN:SEMESTER_BLOCK -->
+<div class="semester">
+  <p class="semester-heading">{NOISE_LINE}
+{SEMESTER}
+{SESSION_HEADER}</p>
+  <table class="course-table">
+    <thead>
+      <tr>
+        <th style="width:11%">Crs Code</th>
+        <th style="width:42%">Title</th>
+        <th class="r" style="width:7%">Wgt</th>
+        <th class="r" style="width:8%">Mrk</th>
+        <th class="c bold" style="width:8%">Grd</th>
+        <th class="c" style="width:8%">CrsAvg</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- BEGIN:COURSE_BLOCK -->
+      <tr>
+        <td>{CODE}</td>
+        <td>{COURSE_NAME}</td>
+        <td class="r">{CREDITS}</td>
+        <td class="r">{NUMERIC_MARK}</td>
+        <td class="c bold">{GRADE}</td>
+        <td class="c">{COURSE_AVG}</td>
+      </tr>
+      <!-- END:COURSE_BLOCK -->
+    </tbody>
+  </table>
+  <p class="gpa-summary">
+    Term GPA: {SEMESTER_GPA} &nbsp;|&nbsp; Credits Earned: {SEMESTER_CREDITS}
+    <span class="standing-tag">&nbsp; {STANDING}</span>
+  </p>
+</div>
+<!-- END:SEMESTER_BLOCK -->
+
+<div class="final-summary">
+  <strong>Cumulative GPA:</strong> {CUMULATIVE_GPA} &nbsp;&nbsp;
+  <strong>Total Credits:</strong> {TOTAL_CREDITS}
+</div>
+
+</body>
+</html>

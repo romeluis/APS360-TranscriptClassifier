@@ -26,13 +26,13 @@ MODEL_NAME = "bert-base-cased"
 # ── Sequence handling ─────────────────────────────────────────────────────
 
 MAX_SEQ_LEN = 512
-STRIDE = 128          # overlap for sliding-window on long transcripts
+STRIDE = 64           # smaller stride = more overlap, fewer semesters lost at window edges
 
 # ── Training hyperparameters ──────────────────────────────────────────────
 
 BATCH_SIZE = 32   # A100 (40GB) can run 32 comfortably; drop to 16 for T4
 LEARNING_RATE = 3e-5
-NUM_EPOCHS = 10
+NUM_EPOCHS = 15       # extra epochs for larger dataset; early stopping still triggers at patience=5
 WARMUP_RATIO = 0.1
 WEIGHT_DECAY = 0.01
 MAX_GRAD_NORM = 1.0

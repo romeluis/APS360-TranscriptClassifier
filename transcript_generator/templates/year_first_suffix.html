@@ -1,0 +1,192 @@
+<!--CONFIG
+{
+  "grade_scale": "letter",
+  "courses_per_semester": [3, 7],
+  "semesters": [4, 10],
+  "course_code_format": "uoft_style",
+  "has_credits": true,
+  "has_semester_gpa": true,
+  "has_cumulative_gpa": true,
+  "has_standing": true,
+  "credit_values": [0.5, 1.0],
+  "seasons": ["Fall", "Winter", "Summer"],
+  "year_range": [2019, 2026],
+  "year_first": true
+}
+-->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @page {
+    size: letter;
+    margin: 2cm 1.5cm 2cm 1.5cm;
+    @top-right {
+      content: element(pageHeader);
+    }
+    @bottom-center {
+      content: element(pageFooter);
+    }
+  }
+
+  .page-header {
+    position: running(pageHeader);
+    font-size: 8pt;
+    color: #555;
+    text-align: right;
+  }
+
+  .page-footer {
+    position: running(pageFooter);
+    font-size: 7.5pt;
+    color: #888;
+    text-align: center;
+  }
+
+  body {
+    font-family: Calibri, "Segoe UI", Arial, sans-serif;
+    font-size: 10pt;
+    color: #111;
+    line-height: 1.4;
+  }
+
+  .banner {
+    background: #002A5C;
+    color: white;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+  }
+  .banner h1 {
+    font-size: 13pt;
+    margin: 0 0 3px 0;
+  }
+  .banner p {
+    font-size: 8.5pt;
+    margin: 0;
+    opacity: 0.85;
+  }
+
+  .student-row {
+    display: flex;
+    justify-content: space-between;
+    background: #f7f7f7;
+    padding: 7px 12px;
+    border: 1px solid #ddd;
+    margin-bottom: 14px;
+    font-size: 9.5pt;
+  }
+
+  /* Year-first semester heading: "2022 Fall - BASc - Computer Engineering - Faculty of Applied Science" */
+  .sem-heading {
+    font-size: 11.5pt;
+    font-weight: bold;
+    color: #002A5C;
+    margin: 14px 0 3px 0;
+  }
+
+  .gpa-line {
+    font-size: 9pt;
+    color: #444;
+    margin: 2px 0 5px 0;
+  }
+
+  .course-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9pt;
+    margin-bottom: 4px;
+  }
+  .course-table th {
+    background: #002A5C;
+    color: white;
+    padding: 3px 7px;
+    text-align: left;
+    font-size: 8.5pt;
+  }
+  .course-table tr:nth-child(even) td {
+    background: #f0f4f8;
+  }
+  .course-table td {
+    padding: 2px 7px;
+    border-bottom: 1px solid #ddd;
+  }
+  .course-table .r { text-align: right; }
+  .course-table .c { text-align: center; }
+
+  .proceed {
+    font-size: 8.5pt;
+    color: #2a6e2a;
+    font-weight: bold;
+    margin: 2px 0 10px 0;
+  }
+
+  .cumulative {
+    margin-top: 16px;
+    padding: 8px 12px;
+    border: 1px solid #002A5C;
+    font-size: 9.5pt;
+  }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  Academic Record | {INSTITUTION}
+</div>
+<div class="page-footer">
+  Page of | {ISSUE_DATE} | Not an official document
+</div>
+
+<div class="banner">
+  <h1>{INSTITUTION}</h1>
+  <p>Complete Academic History &mdash; {PROGRAM} &mdash; {FACULTY}</p>
+</div>
+
+<div class="student-row">
+  <div><strong>{STUDENT_NAME}</strong> &nbsp; ID: {STUDENT_ID}</div>
+  <div>DOB: {DOB} &nbsp; Issued: {ISSUE_DATE}</div>
+</div>
+
+<!-- BEGIN:SEMESTER_BLOCK -->
+<div class="semester">
+  <!-- Year-first inline format: "2022 Fall - BASc - Computer Engineering - Faculty of Applied Science"
+       {PROGRAM_INLINE} expands to "- BASc - Computer Engineering - Faculty of Applied Science" -->
+  <p class="sem-heading">{NOISE_LINE}
+{SEMESTER} {PROGRAM_INLINE}</p>
+  <p class="gpa-line">Sessional GPA: {SEMESTER_GPA} &nbsp; Credits: {SEMESTER_CREDITS} &nbsp; {STANDING}</p>
+  <table class="course-table">
+    <thead>
+      <tr>
+        <th style="width:11%">Crs Code</th>
+        <th style="width:43%">Title</th>
+        <th class="r" style="width:7%">Wgt</th>
+        <th class="r" style="width:8%">Mrk</th>
+        <th class="c" style="width:8%">Grd</th>
+        <th class="c" style="width:8%">CrsAvg</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- BEGIN:COURSE_BLOCK -->
+      <tr>
+        <td>{CODE}</td>
+        <td>{COURSE_NAME}</td>
+        <td class="r">{CREDITS}</td>
+        <td class="r">{NUMERIC_MARK}</td>
+        <td class="c">{GRADE}</td>
+        <td class="c">{COURSE_AVG}</td>
+      </tr>
+      <!-- END:COURSE_BLOCK -->
+    </tbody>
+  </table>
+  <p class="proceed">May proceed</p>
+</div>
+<!-- END:SEMESTER_BLOCK -->
+
+<div class="cumulative">
+  <strong>Cumulative GPA:</strong> {CUMULATIVE_GPA} &nbsp;&nbsp;
+  <strong>Total Credits Earned:</strong> {TOTAL_CREDITS}
+</div>
+
+</body>
+</html>

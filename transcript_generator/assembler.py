@@ -84,6 +84,10 @@ def assemble(raw_html, config, blocks, data):
             "{NOISE_LINE}",
             html.escape(sem_data.get("noise_line", "")),
         )
+        sem_html = sem_html.replace(
+            "{PROGRAM_INLINE}",
+            html.escape(sem_data.get("program_inline", "")),
+        )
 
         all_semester_html.append(sem_html)
 

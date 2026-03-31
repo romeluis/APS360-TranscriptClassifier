@@ -256,7 +256,7 @@ DEFAULT_CONFIG = {
     "has_standing": False,
     "credit_values": [0.5, 1.0],
     "seasons": ["Fall", "Winter", "Spring", "Summer"],
-    "year_range": [2018, 2024],
+    "year_range": [2018, 2026],
 }
 
 
@@ -319,15 +319,16 @@ def generate_grade(config):
     scale = config.get("grade_scale", "letter")
 
     # Special/status grades that appear on real transcripts regardless of scale.
-    # These are injected with low probability to train the model on them.
+    # These are injected with higher probability to match real ACORN transcripts
+    # where IPR/CR/H appear frequently (PEY courses, co-op, in-progress terms).
     _special = random.random()
-    if _special < 0.05:
+    if _special < 0.08:
         return "IPR", 0.0   # In Progress
-    elif _special < 0.08:
+    elif _special < 0.14:
         return "CR", 3.0    # Credit / Pass
-    elif _special < 0.10:
+    elif _special < 0.17:
         return "H", 4.0     # Honour
-    elif _special < 0.11:
+    elif _special < 0.18:
         return "WDR", 0.0   # Withdrawn
 
     if scale == "letter":
@@ -399,6 +400,13 @@ def generate_noise_line():
     page_n = random.randint(1, 8)
     page_total = random.randint(page_n, 10)
 
+    # ACORN registration-history style: year+season in O contexts
+    # Teaches the model that "YYYY Season" is NOT always a semester entity
+    reg_year = random.randint(2019, 2026)
+    reg_season = random.choice(["Fall", "Winter", "Summer", "Spring"])
+    reg_year2 = reg_year + 1
+    reg_season2 = random.choice(["Fall", "Winter", "Summer"])
+
     noise_templates = [
         # Timestamps (the most common false-SEM trigger)
         f"{now_year}-{now_month:02d}-{now_day:02d}, {hour12}:{now_min:02d} {am_pm}",
@@ -423,6 +431,21 @@ def generate_noise_line():
         "Continued on next page",
         "Continued...",
         f"Academic History - {institution}",
+        # ACORN-style registration history entries — year+season appears as O here,
+        # teaching the model that "YYYY Season" in these contexts is NOT a semester.
+        f"In Progress - {reg_year} {reg_season} - PEY Co-op Program",
+        f"{reg_year} {reg_season} - Dean's Honour List",
+        f"{reg_year} {reg_season}-{reg_year2} {reg_season2}: Faculty of Applied Science & Engineering",
+        f"Registration History {reg_year} {reg_season}-{reg_year2} {reg_season2}",
+        # ACORN boilerplate O tokens
+        "PEY Co-op Program",
+        "May proceed",
+        "Status: Pass with Honours",
+        "Status: Pass",
+        "Sessional % Average",
+        "Annual GPA",
+        f"https://acorn.utoronto.ca/sws/#/history/academic Page {page_n} of {page_total}",
+        f"Academic History - ACORN {now_year}-{now_month:02d}-{now_day:02d}, {hour12}:{now_min:02d} {am_pm}",
     ]
     return random.choice(noise_templates)
 
@@ -434,8 +457,16 @@ def generate_session_header(semester_name, program, faculty):
     between the semester label and the first course row. This text is
     all O-labeled — it looks like NAME/SEM to the model without training.
 
+    IMPORTANT: We deliberately do NOT repeat the semester_name here.
+    Previously this function started lines with "{semester_name} - degree - program",
+    which caused the model to learn a spurious cue: "tag the first occurrence of
+    'YYYY Season' as B-SEM/I-SEM, because the second occurrence (in session header)
+    is O". Real ACORN transcripts have the semester appear exactly ONCE inline with
+    the program info, so removing the repetition forces the model to learn the
+    correct single-occurrence pattern.
+
     Args:
-        semester_name: e.g. "Fall 2022" (used to build a plausible line)
+        semester_name: e.g. "Fall 2022" (kept for API compat, not used in text)
         program: student program string
         faculty: student faculty string
 
@@ -445,9 +476,13 @@ def generate_session_header(semester_name, program, faculty):
     degree_types = ["BASc", "BSc", "BA", "BEng", "BCom", "BFA", "BEd", "BNurs"]
     degree = random.choice(degree_types)
 
+    # Short program name (e.g. "Computer Engineering" from "Bachelor of Engineering, Computer Engineering")
+    prog_short = program.split(',')[-1].strip() if ',' in program else program
+
     # GPA stats line (common in many registrar systems)
     sess_gpa = round(random.triangular(1.5, 4.0, 3.2), 2)
     cum_gpa = round(random.triangular(1.5, 4.0, 3.2), 2)
+    ann_gpa = round(random.triangular(1.5, 4.0, 3.2), 2)
     pct_avg = round(random.uniform(55, 92), 1)
 
     status_options = [
@@ -457,18 +492,24 @@ def generate_session_header(semester_name, program, faculty):
     status = random.choice(status_options)
 
     lines = []
-    # ~60% chance of a program/degree header line
+    # ~60% chance of a program/degree header line — NO semester name prefix.
+    # Generates text like "- BASc - Computer Engineering" or "BASc - Computer Science - Faculty of Arts",
+    # matching ACORN's inline format where the semester itself already precedes this.
     if random.random() < 0.60:
-        lines.append(f"{semester_name} - {degree} - {program.split(',')[0].strip()}")
+        if random.random() < 0.50:
+            # ACORN-style: starts with " - " (semester was just before this)
+            lines.append(f"- {degree} - {prog_short}")
+        else:
+            lines.append(f"{degree} - {prog_short}")
         if random.random() < 0.50:
             lines.append(faculty)
 
     # ~70% chance of GPA stats
     if random.random() < 0.70:
-        lines.append(
-            f"Sessional GPA  {sess_gpa:.2f}  "
-            f"Cumulative GPA  {cum_gpa:.2f}"
-        )
+        gpa_line = f"Sessional GPA  {sess_gpa:.2f}  Cumulative GPA  {cum_gpa:.2f}"
+        if random.random() < 0.30:
+            gpa_line += f"  Annual GPA  {ann_gpa:.2f}"
+        lines.append(gpa_line)
         if random.random() < 0.40:
             lines.append(f"Sessional % Average  {pct_avg}")
 
@@ -476,17 +517,32 @@ def generate_session_header(semester_name, program, faculty):
     if random.random() < 0.50:
         lines.append(f"Status: {status}")
 
+    # ~30% chance of ACORN-style "PEY Co-op Program" / program registration line
+    if random.random() < 0.30:
+        lines.append(random.choice([
+            "PEY Co-op Program",
+            "Co-operative Education Program",
+            "Exchange Program",
+        ]))
+
     return "\n".join(lines) if lines else f"Status: {status}"
 
 
 def generate_student_info(config):
     """Generate random student metadata."""
+    program = random.choice(PROGRAMS)
+    faculty = random.choice(FACULTIES)
+    # Short program name for inline semester headers (e.g. "Computer Engineering")
+    prog_short = program.split(',')[-1].strip() if ',' in program else program
+    degree = random.choice(["BASc", "BSc", "BA", "BEng", "BCom", "BFA", "BEd", "BNurs"])
     return {
         "STUDENT_NAME": fake.name(),
         "STUDENT_ID": str(random.randint(100000000, 999999999)),
         "INSTITUTION": random.choice(INSTITUTIONS),
-        "PROGRAM": random.choice(PROGRAMS),
-        "FACULTY": random.choice(FACULTIES),
+        "PROGRAM": program,
+        "FACULTY": faculty,
+        "PROGRAM_SHORT": prog_short,
+        "DEGREE": degree,
         "DOB": fake.date_of_birth(minimum_age=18, maximum_age=30).strftime("%B %d, %Y"),
         "ISSUE_DATE": fake.date_between(start_date="-1y", end_date="today").strftime("%B %d, %Y"),
     }
@@ -586,6 +642,13 @@ def generate_transcript_data(config, course_pool=None):
                 student_info["FACULTY"],
             ),
             "noise_line": generate_noise_line(),
+            # Inline program suffix for ACORN-style templates:
+            # renders as "- BASc - Computer Engineering - Faculty of Arts"
+            # on the same line as {SEMESTER}, matching ACORN's format.
+            "program_inline": (
+                f"- {student_info['DEGREE']} - {student_info['PROGRAM_SHORT']}"
+                f" - {student_info['FACULTY']}"
+            ),
         })
 
     total_gpa_points = sum(all_gpa_points)

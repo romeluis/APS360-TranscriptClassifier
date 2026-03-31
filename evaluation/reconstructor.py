@@ -30,6 +30,10 @@ def _is_plausible_semester(name: str) -> bool:
     # Reject bare hyphens: "Fall-2026", "2021-Fall" (allow " - " with spaces)
     if re.search(r"\S-\S", name):
         return False
+    # Reject ACORN registration-history fragments like "In Progress - 2021 Fall"
+    # or "Dean's Honour List" — these are O-context occurrences of year+season
+    if re.search(r"(In\s+Progress|Dean|Honours?|Honour\s+List)", name, re.IGNORECASE):
+        return False
     # Must contain a year in plausible academic range
     years = re.findall(r"\b(19\d{2}|20\d{2})\b", name)
     if not years or not (1990 <= int(years[0]) <= 2035):
