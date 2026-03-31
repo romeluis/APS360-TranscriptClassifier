@@ -133,6 +133,26 @@ def train(
     train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_ds, batch_size=batch_size)
 
+    # ── Class weights (inverse frequency) ────────────────────────────
+    # BIO labels are heavily imbalanced: O is ~70% of tokens while
+    # B-SEM is <1%. Upweighting rare entity classes improves recall
+    # on semester detection without hurting overall accuracy.
+    print("Computing class weights...")
+    label_counts = np.zeros(NUM_LABELS, dtype=np.float64)
+    for batch in train_loader:
+        labels_flat = batch["labels"].numpy().flatten()
+        for label_id in labels_flat:
+            if label_id != -100:
+                label_counts[label_id] += 1
+    # Inverse frequency: weight_i = total / (n_classes * count_i)
+    # Clamp to avoid division by zero for unseen labels.
+    total = label_counts.sum()
+    label_counts = np.maximum(label_counts, 1.0)
+    class_weights = total / (NUM_LABELS * label_counts)
+    class_weights_tensor = torch.tensor(class_weights, dtype=torch.float32).to(device)
+    print("  Label counts:", {ID_TO_LABEL[i]: int(label_counts[i]) for i in range(NUM_LABELS)})
+    print("  Class weights:", {ID_TO_LABEL[i]: f"{class_weights[i]:.2f}" for i in range(NUM_LABELS)})
+
     # ── Model ─────────────────────────────────────────────────────────
     print(f"Loading {MODEL_NAME}...")
     model = BertForTokenClassification.from_pretrained(
@@ -142,6 +162,11 @@ def train(
         label2id=LABEL_TO_ID,
     )
     model.to(device)
+    # Override the built-in loss with a weighted version so rare SEM/CODE
+    # tags are not overwhelmed by the majority O class.
+    _loss_fct = torch.nn.CrossEntropyLoss(
+        weight=class_weights_tensor, ignore_index=-100
+    )
 
     # ── Optimiser & scheduler ─────────────────────────────────────────
     no_decay = {"bias", "LayerNorm.weight"}
@@ -202,9 +227,11 @@ def train(
                 outputs = model(
                     input_ids=input_ids,
                     attention_mask=attention_mask,
-                    labels=labels,
                 )
-                loss = outputs.loss
+                loss = _loss_fct(
+                    outputs.logits.view(-1, NUM_LABELS),
+                    labels.view(-1),
+                )
 
             scaler.scale(loss).backward()
             scaler.unscale_(optimizer)
@@ -240,10 +267,13 @@ def train(
                     outputs = model(
                         input_ids=input_ids,
                         attention_mask=attention_mask,
-                        labels=labels,
+                    )
+                    val_loss = _loss_fct(
+                        outputs.logits.view(-1, NUM_LABELS),
+                        labels.view(-1),
                     )
 
-                val_loss_sum += outputs.loss.item()
+                val_loss_sum += val_loss.item()
                 val_steps += 1
 
                 true_batch, pred_batch = _decode_predictions(outputs.logits, labels)

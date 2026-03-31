@@ -122,7 +122,9 @@
 
     <!-- BEGIN:SEMESTER_BLOCK -->
     <div class="semester-block">
-      <div class="semester-header">{SEMESTER}</div>
+      <div class="semester-header">{NOISE_LINE}
+{SEMESTER}
+{SESSION_HEADER}</div>
       <table class="courses-table">
         <thead>
           <tr>
@@ -136,7 +138,8 @@
           <tr>
             <td>{CODE}</td>
             <td>{COURSE_NAME}</td>
-            <td>{GRADE}</td>
+            <td>{NUMERIC_MARK}</td>
+        <td>{GRADE}</td>
           </tr>
           <!-- END:COURSE_BLOCK -->
         </tbody>

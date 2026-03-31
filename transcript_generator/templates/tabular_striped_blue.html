@@ -154,7 +154,9 @@
 
     <!-- BEGIN:SEMESTER_BLOCK -->
     <div class="semester-block">
-      <div class="semester-header">{SEMESTER}</div>
+      <div class="semester-header">{NOISE_LINE}
+{SEMESTER}
+{SESSION_HEADER}</div>
       <div class="semester-info">
         <span>Semester GPA: <strong>{SEMESTER_GPA}</strong></span>
         <span>Credits: <strong>{SEMESTER_CREDITS}</strong></span>
@@ -164,7 +166,8 @@
           <tr>
             <th>Code</th>
             <th>Course Name</th>
-            <th>Grade</th>
+            <th>Mrk</th>
+        <th>Grade</th>
             <th>Credits</th>
             <th>Class Avg</th>
           </tr>
@@ -174,7 +177,8 @@
           <tr>
             <td><strong>{CODE}</strong></td>
             <td>{COURSE_NAME}</td>
-            <td>{GRADE}</td>
+            <td>{NUMERIC_MARK}</td>
+        <td>{GRADE}</td>
             <td>{CREDITS}</td>
             <td>{COURSE_AVG}</td>
           </tr>

@@ -202,13 +202,16 @@
 
 <!-- BEGIN:SEMESTER_BLOCK -->
 <div class="session">
-  <p class="session-header">{SEMESTER}</p>
+  <p class="session-header">{NOISE_LINE}
+{SEMESTER}
+{SESSION_HEADER}</p>
   <table class="course-table">
     <thead>
       <tr>
         <th class="code-col">Crs Code</th>
         <th class="title-col">Title</th>
         <th class="wgt-col">Wgt</th>
+        <th>Mrk</th>
         <th class="grd-col">Grd</th>
         <th class="avg-col">Cls Avg</th>
       </tr>
@@ -219,6 +222,7 @@
         <td class="code-col">{CODE}</td>
         <td class="title-col">{COURSE_NAME}</td>
         <td class="wgt-col">{CREDITS}</td>
+        <td>{NUMERIC_MARK}</td>
         <td class="grd-col">{GRADE}</td>
         <td class="avg-col">{COURSE_AVG}</td>
       </tr>

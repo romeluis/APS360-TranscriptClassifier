@@ -380,6 +380,105 @@ def generate_semesters(config):
     return semesters
 
 
+def generate_noise_line():
+    """Generate a realistic O-labeled noise string that appears in real PDFs.
+
+    These represent page headers, footers, timestamps, and system text that
+    PDF extraction inserts into the token stream but should not be tagged as
+    any entity. Teaching the model to label these O is critical for
+    generalization across all university PDF formats.
+    """
+    now_year = random.randint(2020, 2026)
+    now_month = random.randint(1, 12)
+    now_day = random.randint(1, 28)
+    now_hour = random.randint(8, 17)
+    now_min = random.randint(0, 59)
+    am_pm = "AM" if now_hour < 12 else "PM"
+    hour12 = now_hour if now_hour <= 12 else now_hour - 12
+    institution = random.choice(INSTITUTIONS)
+    page_n = random.randint(1, 8)
+    page_total = random.randint(page_n, 10)
+
+    noise_templates = [
+        # Timestamps (the most common false-SEM trigger)
+        f"{now_year}-{now_month:02d}-{now_day:02d}, {hour12}:{now_min:02d} {am_pm}",
+        f"{now_month:02d}/{now_day:02d}/{now_year} {hour12}:{now_min:02d} {am_pm}",
+        f"Printed: {now_month:02d}/{now_day:02d}/{now_year}",
+        # Page numbers
+        f"Page {page_n} of {page_total}",
+        f"- {page_n} -",
+        f"p. {page_n}",
+        # Document labels
+        "Unofficial Transcript",
+        "Official Academic Transcript",
+        "Academic History",
+        "Student Academic Record",
+        "This is not an official transcript.",
+        "UNOFFICIAL — FOR INFORMATION ONLY",
+        # School branding repeated in headers
+        institution,
+        f"{institution} — Office of the Registrar",
+        f"Office of the Registrar",
+        # Continuation markers
+        "Continued on next page",
+        "Continued...",
+        f"Academic History - {institution}",
+    ]
+    return random.choice(noise_templates)
+
+
+def generate_session_header(semester_name, program, faculty):
+    """Generate realistic inter-semester section text (labeled O).
+
+    Many registrar PDFs insert program info, degree type, and GPA stats
+    between the semester label and the first course row. This text is
+    all O-labeled — it looks like NAME/SEM to the model without training.
+
+    Args:
+        semester_name: e.g. "Fall 2022" (used to build a plausible line)
+        program: student program string
+        faculty: student faculty string
+
+    Returns:
+        Multi-line string, all O-labeled.
+    """
+    degree_types = ["BASc", "BSc", "BA", "BEng", "BCom", "BFA", "BEd", "BNurs"]
+    degree = random.choice(degree_types)
+
+    # GPA stats line (common in many registrar systems)
+    sess_gpa = round(random.triangular(1.5, 4.0, 3.2), 2)
+    cum_gpa = round(random.triangular(1.5, 4.0, 3.2), 2)
+    pct_avg = round(random.uniform(55, 92), 1)
+
+    status_options = [
+        "Pass with Honours", "Pass", "Good Standing",
+        "Dean's Honour List", "Academic Probation",
+    ]
+    status = random.choice(status_options)
+
+    lines = []
+    # ~60% chance of a program/degree header line
+    if random.random() < 0.60:
+        lines.append(f"{semester_name} - {degree} - {program.split(',')[0].strip()}")
+        if random.random() < 0.50:
+            lines.append(faculty)
+
+    # ~70% chance of GPA stats
+    if random.random() < 0.70:
+        lines.append(
+            f"Sessional GPA  {sess_gpa:.2f}  "
+            f"Cumulative GPA  {cum_gpa:.2f}"
+        )
+        if random.random() < 0.40:
+            lines.append(f"Sessional % Average  {pct_avg}")
+
+    # ~50% chance of standing line
+    if random.random() < 0.50:
+        lines.append(f"Status: {status}")
+
+    return "\n".join(lines) if lines else f"Status: {status}"
+
+
 def generate_student_info(config):
     """Generate random student metadata."""
     return {
@@ -438,9 +537,14 @@ def generate_transcript_data(config, course_pool=None):
             name = generate_course_name(dept, course_pool=course_pool)
             grade_display, gpa_points = generate_grade(config)
             credits = random.choice(credit_values)
-            # course_avg: class average grade (non-entity, like CrsAvg column in
-            # many registrar systems). Independent of the student's grade.
+            # course_avg: class average grade (non-entity, like CrsAvg column).
             course_avg_display, _ = generate_grade(config)
+            # numeric_mark: raw percentage score (non-entity, like "Mrk" column).
+            # Blank for special grades (IPR/CR/H/WDR) since those have no numeric mark.
+            if grade_display in ("IPR", "CR", "H", "WDR"):
+                numeric_mark = ""
+            else:
+                numeric_mark = str(random.randint(50, 98))
 
             courses.append({
                 "code": code,
@@ -449,6 +553,7 @@ def generate_transcript_data(config, course_pool=None):
                 "credits": str(credits),
                 "grade_points": str(gpa_points),
                 "course_avg": course_avg_display,
+                "numeric_mark": numeric_mark,
             })
 
             sem_gpa_sum += gpa_points * credits
@@ -475,6 +580,12 @@ def generate_transcript_data(config, course_pool=None):
             "semester_gpa": f"{sem_gpa:.2f}",
             "semester_credits": str(sem_credit_sum),
             "standing": standing,
+            "session_header": generate_session_header(
+                sem_name,
+                student_info["PROGRAM"],
+                student_info["FACULTY"],
+            ),
+            "noise_line": generate_noise_line(),
         })
 
     total_gpa_points = sum(all_gpa_points)

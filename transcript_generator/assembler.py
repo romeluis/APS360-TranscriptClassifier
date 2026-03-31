@@ -59,6 +59,7 @@ def assemble(raw_html, config, blocks, data):
             row = _replace_tag(row, "CREDITS", course["credits"])
             row = _replace_tag(row, "GRADE_POINTS", course.get("grade_points", ""))
             row = _replace_tag(row, "COURSE_AVG", course.get("course_avg", ""))
+            row = _replace_tag(row, "NUMERIC_MARK", course.get("numeric_mark", ""))
             course_rows.append(row)
 
         # Replace the COURSE_BLOCK region with expanded course rows
@@ -74,6 +75,15 @@ def assemble(raw_html, config, blocks, data):
         sem_html = sem_html.replace("{SEMESTER_GPA}", html.escape(sem_data.get("semester_gpa", "")))
         sem_html = sem_html.replace("{SEMESTER_CREDITS}", html.escape(sem_data.get("semester_credits", "")))
         sem_html = sem_html.replace("{STANDING}", html.escape(sem_data.get("standing", "")))
+        # Non-entity O-labeled noise placeholders
+        sem_html = sem_html.replace(
+            "{SESSION_HEADER}",
+            html.escape(sem_data.get("session_header", "")),
+        )
+        sem_html = sem_html.replace(
+            "{NOISE_LINE}",
+            html.escape(sem_data.get("noise_line", "")),
+        )
 
         all_semester_html.append(sem_html)
 
