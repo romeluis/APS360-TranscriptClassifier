@@ -68,6 +68,11 @@ class TranscriptNERModel(nn.Module):
         emissions = self.classifier(self.dropout(outputs.last_hidden_state))
         # (batch, seq_len, num_labels)
 
+        # Cast to fp32 before CRF: the Viterbi/forward-backward algorithm uses
+        # log-sum-exp which is numerically sensitive and can produce NaN in bf16.
+        # The encoder runs in bf16 (fast), only the CRF head needs fp32 (tiny cost).
+        emissions_fp32 = emissions.float()
+
         # CRF requires a boolean mask over valid (non-padding) positions.
         crf_mask = attention_mask.bool()  # (batch, seq_len)
 
@@ -81,14 +86,17 @@ class TranscriptNERModel(nn.Module):
             # valid_mask: positions that are (a) not padding and (b) not ignored (-100)
             valid_mask = (labels != -100) & crf_mask  # (batch, seq_len)
 
-            # CRF negative log-likelihood (summed over valid positions, averaged over batch)
-            loss = -self.crf(emissions, crf_labels, mask=valid_mask, reduction="mean")
-            return loss, emissions
+            # CRF negative log-likelihood (averaged over batch)
+            loss = -self.crf(emissions_fp32, crf_labels, mask=valid_mask, reduction="mean")
+            # Also Viterbi decode in the same pass (used for val metrics without
+            # a second forward call — decode is cheap compared to encoder forward)
+            predictions = self.crf.decode(emissions_fp32, mask=crf_mask)
+            return loss, emissions_fp32, predictions
 
         else:
-            # Viterbi decode — returns list[list[int]], one path per batch item
-            predictions = self.crf.decode(emissions, mask=crf_mask)
-            return predictions, emissions
+            # Inference only — Viterbi decode, no loss
+            predictions = self.crf.decode(emissions_fp32, mask=crf_mask)
+            return predictions, emissions_fp32
 
     def save_pretrained(self, save_dir: str):
         """Save encoder + full model state to directory."""

@@ -52,7 +52,7 @@ from .config import (
 )
 from .data_split import save_split_info, split_by_template
 from .dataset import TranscriptNERDataset
-from .ner_model import FocalCRFLoss, TranscriptNERModel
+from .ner_model import TranscriptNERModel
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────
@@ -179,13 +179,12 @@ def train(
     )
     model.to(device)
 
-    # FocalCRFLoss: CRF NLL scaled by focal weighting on emission probabilities.
-    # This combines the sequence-constraint benefit of CRF with focal loss's
-    # down-weighting of easy O tokens, focusing training on hard entity boundaries.
-    loss_fn = FocalCRFLoss(
-        crf=model.crf,
-        gamma=2.0,
-        alpha=class_weights_tensor,
+    # Auxiliary CE loss on emission logits (weighted by inverse class frequency).
+    # CRF NLL is the primary loss; CE is a small auxiliary signal that directly
+    # penalises wrong per-token predictions and handles class imbalance.
+    # Using weight=0.1 so CE doesn't overwhelm the CRF sequence loss.
+    _ce_loss_fct = torch.nn.CrossEntropyLoss(
+        weight=class_weights_tensor, ignore_index=-100
     )
 
     # ── Optimiser & scheduler ─────────────────────────────────────────
@@ -246,14 +245,17 @@ def train(
             labels = batch["labels"].to(device)
 
             with torch.amp.autocast("cuda", enabled=use_bf16, dtype=torch.bfloat16):
-                # TranscriptNERModel.forward() returns (loss, emissions) in train mode
-                loss, emissions = model(
+                # model.forward() returns (crf_nll, emissions_fp32, viterbi_paths).
+                # Emissions are already fp32 inside the model for CRF stability.
+                crf_loss, emissions, _ = model(
                     input_ids=input_ids,
                     attention_mask=attention_mask,
                     labels=labels,
                 )
-                # Apply focal CRF loss using the same emissions
-                loss = loss_fn(emissions, labels, attention_mask.bool())
+                # Auxiliary weighted CE on emissions: handles class imbalance and
+                # gives a direct per-token gradient alongside the CRF sequence loss.
+                ce_loss = _ce_loss_fct(emissions.view(-1, NUM_LABELS), labels.view(-1))
+                loss = crf_loss + 0.1 * ce_loss
 
             scaler.scale(loss).backward()
             scaler.unscale_(optimizer)
@@ -286,12 +288,12 @@ def train(
                 labels = batch["labels"].to(device)
 
                 with torch.amp.autocast("cuda", enabled=use_bf16, dtype=torch.bfloat16):
-                    # Inference mode: returns (Viterbi paths, emissions)
-                    crf_paths, emissions = model(
-                        input_ids=input_ids,
-                        attention_mask=attention_mask,
+                    # Single forward pass: returns loss + emissions + Viterbi paths
+                    crf_loss_val, emissions, crf_paths = model(
+                        input_ids, attention_mask, labels
                     )
-                    val_loss = loss_fn(emissions, labels, attention_mask.bool())
+                    ce_loss_val = _ce_loss_fct(emissions.view(-1, NUM_LABELS), labels.view(-1))
+                    val_loss = crf_loss_val + 0.1 * ce_loss_val
 
                 val_loss_sum += val_loss.item()
                 val_steps += 1
