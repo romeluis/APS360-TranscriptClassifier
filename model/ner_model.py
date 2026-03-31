@@ -86,8 +86,12 @@ class TranscriptNERModel(nn.Module):
             # valid_mask: positions that are (a) not padding and (b) not ignored (-100)
             valid_mask = (labels != -100) & crf_mask  # (batch, seq_len)
 
-            # CRF negative log-likelihood (averaged over batch)
-            loss = -self.crf(emissions_fp32, crf_labels, mask=valid_mask, reduction="mean")
+            # CRF negative log-likelihood (averaged over valid tokens, not batch size).
+            # torchcrf reduction="mean" divides by batch size only, giving ~659 nats/seq
+            # for a random model → loss ≈ 500 → bf16 gradient overflow → NaN.
+            # Dividing by num_valid tokens keeps the scale comparable to CE (~2–3).
+            num_valid = valid_mask.sum().clamp(min=1)
+            loss = -self.crf(emissions_fp32, crf_labels, mask=valid_mask, reduction="sum") / num_valid
             # Also Viterbi decode in the same pass (used for val metrics without
             # a second forward call — decode is cheap compared to encoder forward)
             predictions = self.crf.decode(emissions_fp32, mask=crf_mask)
