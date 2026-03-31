@@ -367,16 +367,12 @@ def generate_semesters(config):
     for _ in range(n_semesters):
         season = seasons[season_idx]
         # Vary semester name format to match real transcripts:
-        #   ~45% "Fall 2021"  (season-first, most common)
-        #   ~40% "2021 Fall"  (year-first, e.g. ACORN/UofT)
-        #   ~15% "2021 - Fall" (year-dash-season, some registrar systems)
-        r = random.random()
-        if r < 0.45:
+        #   ~55% "Fall 2021"  (season-first, most common globally)
+        #   ~45% "2021 Fall"  (year-first, common in many registrar systems)
+        if random.random() < 0.55:
             semesters.append(f"{season} {year}")
-        elif r < 0.85:
-            semesters.append(f"{year} {season}")
         else:
-            semesters.append(f"{year} - {season}")
+            semesters.append(f"{year} {season}")
         season_idx += 1
         if season_idx >= len(seasons):
             season_idx = 0
@@ -442,6 +438,9 @@ def generate_transcript_data(config, course_pool=None):
             name = generate_course_name(dept, course_pool=course_pool)
             grade_display, gpa_points = generate_grade(config)
             credits = random.choice(credit_values)
+            # course_avg: class average grade (non-entity, like CrsAvg column in
+            # many registrar systems). Independent of the student's grade.
+            course_avg_display, _ = generate_grade(config)
 
             courses.append({
                 "code": code,
@@ -449,6 +448,7 @@ def generate_transcript_data(config, course_pool=None):
                 "grade": grade_display,
                 "credits": str(credits),
                 "grade_points": str(gpa_points),
+                "course_avg": course_avg_display,
             })
 
             sem_gpa_sum += gpa_points * credits

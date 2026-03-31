@@ -58,6 +58,7 @@ def assemble(raw_html, config, blocks, data):
             row = _replace_tag(row, "GRADE", course["grade"])
             row = _replace_tag(row, "CREDITS", course["credits"])
             row = _replace_tag(row, "GRADE_POINTS", course.get("grade_points", ""))
+            row = _replace_tag(row, "COURSE_AVG", course.get("course_avg", ""))
             course_rows.append(row)
 
         # Replace the COURSE_BLOCK region with expanded course rows
