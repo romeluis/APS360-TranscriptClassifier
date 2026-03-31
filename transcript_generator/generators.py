@@ -318,6 +318,18 @@ def generate_grade(config):
     """Generate a grade value based on the configured scale. Returns (display_value, gpa_points)."""
     scale = config.get("grade_scale", "letter")
 
+    # Special/status grades that appear on real transcripts regardless of scale.
+    # These are injected with low probability to train the model on them.
+    _special = random.random()
+    if _special < 0.05:
+        return "IPR", 0.0   # In Progress
+    elif _special < 0.08:
+        return "CR", 3.0    # Credit / Pass
+    elif _special < 0.10:
+        return "H", 4.0     # Honour
+    elif _special < 0.11:
+        return "WDR", 0.0   # Withdrawn
+
     if scale == "letter":
         grade = random.choices(LETTER_GRADES, weights=LETTER_WEIGHTS, k=1)[0]
         return grade, LETTER_TO_GPA[grade]
@@ -353,7 +365,18 @@ def generate_semesters(config):
     semesters = []
     year = start_year
     for _ in range(n_semesters):
-        semesters.append(f"{seasons[season_idx]} {year}")
+        season = seasons[season_idx]
+        # Vary semester name format to match real transcripts:
+        #   ~45% "Fall 2021"  (season-first, most common)
+        #   ~40% "2021 Fall"  (year-first, e.g. ACORN/UofT)
+        #   ~15% "2021 - Fall" (year-dash-season, some registrar systems)
+        r = random.random()
+        if r < 0.45:
+            semesters.append(f"{season} {year}")
+        elif r < 0.85:
+            semesters.append(f"{year} {season}")
+        else:
+            semesters.append(f"{year} - {season}")
         season_idx += 1
         if season_idx >= len(seasons):
             season_idx = 0

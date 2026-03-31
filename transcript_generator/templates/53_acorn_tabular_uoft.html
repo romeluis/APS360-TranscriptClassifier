@@ -1,0 +1,247 @@
+<!--CONFIG
+{
+  "grade_scale": "letter",
+  "courses_per_semester": [4, 7],
+  "semesters": [4, 12],
+  "course_code_format": "uoft_style",
+  "has_credits": true,
+  "has_semester_gpa": false,
+  "has_cumulative_gpa": true,
+  "has_standing": false,
+  "credit_values": [0.5, 1.0],
+  "seasons": ["Fall", "Winter", "Summer"],
+  "year_range": [2019, 2025]
+}
+-->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @page {
+    size: letter;
+    margin: 1.5cm 1.2cm 2cm 1.2cm;
+    @top-right {
+      content: element(pageStamp);
+      font-size: 7pt;
+      color: #666;
+    }
+    @bottom-center {
+      content: element(pageFooter);
+    }
+  }
+
+  .page-stamp {
+    position: running(pageStamp);
+    font-family: "Courier New", monospace;
+    font-size: 7pt;
+    color: #888;
+    white-space: nowrap;
+  }
+
+  .page-footer {
+    position: running(pageFooter);
+    font-family: "Courier New", monospace;
+    font-size: 7pt;
+    color: #777;
+    text-align: center;
+    border-top: 1px solid #bbb;
+    padding-top: 4px;
+  }
+
+  body {
+    font-family: "Courier New", Courier, monospace;
+    font-size: 8.5pt;
+    color: #111;
+    line-height: 1.3;
+  }
+
+  .transcript-header {
+    text-align: center;
+    border-bottom: 2px solid #000;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+  }
+  .transcript-header h1 {
+    font-size: 13pt;
+    margin: 0 0 2px 0;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .transcript-header h2 {
+    font-size: 9pt;
+    font-weight: normal;
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+  }
+
+  .student-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0 12px 0;
+    font-size: 8pt;
+  }
+  .student-table td {
+    padding: 2px 4px;
+    border: none;
+  }
+  .student-table .lbl {
+    font-weight: bold;
+    width: 120px;
+    text-transform: uppercase;
+    font-size: 7.5pt;
+  }
+
+  .program-bar {
+    background: #e0e0e0;
+    padding: 3px 6px;
+    font-size: 8pt;
+    margin-bottom: 10px;
+    border: 1px solid #aaa;
+    text-transform: uppercase;
+  }
+
+  .session-header {
+    background: #222;
+    color: #fff;
+    padding: 3px 6px;
+    font-size: 9pt;
+    font-weight: bold;
+    margin-top: 12px;
+    margin-bottom: 0;
+    letter-spacing: 0.5px;
+  }
+
+  .course-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0 0 8px 0;
+    font-size: 8pt;
+  }
+  .course-table th {
+    background: #f0f0f0;
+    border: 1px solid #aaa;
+    padding: 2px 5px;
+    text-align: left;
+    font-size: 7.5pt;
+    font-weight: bold;
+    text-transform: uppercase;
+  }
+  .course-table td {
+    border: 1px solid #ccc;
+    padding: 2px 5px;
+    vertical-align: top;
+  }
+  .course-table tr:nth-child(even) td {
+    background: #fafafa;
+  }
+  .code-col   { width: 80px;  }
+  .title-col  { width: auto;  }
+  .wgt-col    { width: 36px;  text-align: center; }
+  .grd-col    { width: 34px;  text-align: center; }
+  .avg-col    { width: 46px;  text-align: center; }
+
+  .summary-block {
+    border-top: 2px solid #000;
+    margin-top: 16px;
+    padding-top: 6px;
+    font-size: 8pt;
+  }
+  .summary-block table {
+    border-collapse: collapse;
+    width: 260px;
+  }
+  .summary-block td {
+    padding: 2px 8px 2px 0;
+  }
+  .summary-block .lbl {
+    font-weight: bold;
+    text-transform: uppercase;
+    font-size: 7.5pt;
+  }
+
+  .disclaimer {
+    margin-top: 18px;
+    font-size: 7pt;
+    color: #555;
+    text-align: center;
+    font-style: italic;
+  }
+</style>
+</head>
+<body>
+
+<div class="page-stamp">{ISSUE_DATE}</div>
+
+<div class="page-footer">
+  This is not an official transcript. &nbsp; {INSTITUTION}
+</div>
+
+<div class="transcript-header">
+  <h1>{INSTITUTION}</h1>
+  <h2>Student Academic History</h2>
+</div>
+
+<table class="student-table">
+  <tr>
+    <td class="lbl">Family, Given Name:</td>
+    <td>{STUDENT_NAME}</td>
+    <td class="lbl">Student No:</td>
+    <td>{STUDENT_ID}</td>
+  </tr>
+  <tr>
+    <td class="lbl">Program:</td>
+    <td>{PROGRAM}</td>
+    <td class="lbl">Date of Birth:</td>
+    <td>{DOB}</td>
+  </tr>
+</table>
+
+<div class="program-bar">Faculty / Division: {FACULTY}</div>
+
+<!-- BEGIN:SEMESTER_BLOCK -->
+<div class="session">
+  <p class="session-header">{SEMESTER}</p>
+  <table class="course-table">
+    <thead>
+      <tr>
+        <th class="code-col">Crs Code</th>
+        <th class="title-col">Title</th>
+        <th class="wgt-col">Wgt</th>
+        <th class="grd-col">Grd</th>
+        <th class="avg-col">CrsAvg</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- BEGIN:COURSE_BLOCK -->
+      <tr>
+        <td class="code-col">{CODE}</td>
+        <td class="title-col">{COURSE_NAME}</td>
+        <td class="wgt-col">{CREDITS}</td>
+        <td class="grd-col">{GRADE}</td>
+        <td class="avg-col">{GRADE_POINTS}</td>
+      </tr>
+      <!-- END:COURSE_BLOCK -->
+    </tbody>
+  </table>
+</div>
+<!-- END:SEMESTER_BLOCK -->
+
+<div class="summary-block">
+  <table>
+    <tr>
+      <td class="lbl">Cumulative GPA:</td>
+      <td>{CUMULATIVE_GPA}</td>
+    </tr>
+    <tr>
+      <td class="lbl">Total Credits:</td>
+      <td>{TOTAL_CREDITS}</td>
+    </tr>
+  </table>
+</div>
+
+<p class="disclaimer">Generated for testing purposes only. Not an official academic record.</p>
+
+</body>
+</html>
