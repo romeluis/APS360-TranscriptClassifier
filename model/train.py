@@ -66,12 +66,16 @@ def _set_seed(seed: int):
 
 
 def _decode_predictions_crf(crf_paths, labels):
-    """Convert CRF Viterbi paths + labels into lists of BIO tag strings,
-    ignoring positions where label == -100 (special tokens / padding).
+    """Convert compact CRF Viterbi paths + labels into lists of BIO tag strings.
+
+    The model now returns *compact* Viterbi paths — one entry per first-subword
+    token (positions where label != -100), not one entry per full sequence
+    position.  We walk through the full label tensor and advance a separate
+    index k into the compact path for each real token.
 
     Args:
-        crf_paths: list[list[int]] — Viterbi-decoded label IDs, one per batch item.
-                   Length of each inner list equals seq_len (including padding positions).
+        crf_paths: list[list[int]] — compact Viterbi-decoded label IDs.
+                   len(path[i]) == number of first-subword tokens in sequence i.
         labels:    (B, L) tensor with -100 for ignored positions.
 
     Returns:
@@ -80,13 +84,13 @@ def _decode_predictions_crf(crf_paths, labels):
     true_batch, pred_batch = [], []
     for i, path in enumerate(crf_paths):
         true_seq, pred_seq = [], []
+        k = 0  # index into the compact path for this sequence
         for j in range(labels.size(1)):
             if labels[i, j].item() != -100:
                 true_seq.append(ID_TO_LABEL[labels[i, j].item()])
-                # CRF path may be shorter than seq_len if mask cuts it;
-                # guard with a bounds check.
-                pred_label = ID_TO_LABEL[path[j]] if j < len(path) else "O"
+                pred_label = ID_TO_LABEL[path[k]] if k < len(path) else "O"
                 pred_seq.append(pred_label)
+                k += 1
         true_batch.append(true_seq)
         pred_batch.append(pred_seq)
     return true_batch, pred_batch
@@ -166,6 +170,9 @@ def train(
     total = label_counts.sum()
     label_counts = np.maximum(label_counts, 1.0)
     class_weights = total / (NUM_LABELS * label_counts)
+    # Cap at 10× to prevent extreme gradients from very rare classes
+    # (e.g. I-GRADE computed to ~147×, which destabilises training).
+    class_weights = np.minimum(class_weights, 10.0)
     class_weights_tensor = torch.tensor(class_weights, dtype=torch.float32).to(device)
     print("  Label counts:", {ID_TO_LABEL[i]: int(label_counts[i]) for i in range(NUM_LABELS)})
     print("  Class weights:", {ID_TO_LABEL[i]: f"{class_weights[i]:.2f}" for i in range(NUM_LABELS)})
@@ -178,6 +185,18 @@ def train(
         dropout=0.1,
     )
     model.to(device)
+    # DeBERTa-v3's ConvLayer stores its weights as FP16 (.half() hardcoded).
+    # Under BF16 autocast the backward accumulates BF16 gradients into FP16
+    # .grad tensors; BF16 values that exceed FP16's max (~65504) overflow to
+    # inf, which clip_grad_norm_ propagates as NaN to every parameter.
+    # Fix: promote any FP16 parameters to FP32 after moving to device.
+    _fp16_fixed = 0
+    for param in model.parameters():
+        if param.dtype == torch.float16:
+            param.data = param.data.float()
+            _fp16_fixed += 1
+    if _fp16_fixed:
+        print(f"  Promoted {_fp16_fixed} FP16 parameter tensor(s) to FP32.")
 
     # Auxiliary CE loss on emission logits (weighted by inverse class frequency).
     # CRF NLL is the primary loss; CE is a small auxiliary signal that directly
