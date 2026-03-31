@@ -21,7 +21,7 @@ ID_TO_LABEL = {idx: label for idx, label in enumerate(LABEL_LIST)}
 
 # ── Pre-trained model ─────────────────────────────────────────────────────
 
-MODEL_NAME = "bert-base-cased"
+MODEL_NAME = "microsoft/deberta-v3-base"  # was bert-base-cased; better NER performance
 
 # ── Sequence handling ─────────────────────────────────────────────────────
 
@@ -30,7 +30,7 @@ STRIDE = 64           # smaller stride = more overlap, fewer semesters lost at w
 
 # ── Training hyperparameters ──────────────────────────────────────────────
 
-BATCH_SIZE = 32   # A100 (40GB) can run 32 comfortably; drop to 16 for T4
+BATCH_SIZE = 48   # DeBERTa-v3-base on A100 (40GB): 48 fits well; drop to 16 for T4
 LEARNING_RATE = 3e-5
 NUM_EPOCHS = 15       # extra epochs for larger dataset; early stopping still triggers at patience=5
 WARMUP_RATIO = 0.1

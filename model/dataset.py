@@ -9,7 +9,7 @@ Handles:
 import torch
 from torch.utils.data import Dataset
 
-from .config import ID_TO_LABEL, LABEL_TO_ID, MAX_SEQ_LEN, STRIDE
+from .config import LABEL_TO_ID, MAX_SEQ_LEN, STRIDE
 
 
 class TranscriptNERDataset(Dataset):

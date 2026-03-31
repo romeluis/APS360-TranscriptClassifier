@@ -1,8 +1,14 @@
 """
-Training loop for the BERT NER model.
+Training loop for the TranscriptNER model (DeBERTa-v3-base + CRF).
 
 Provides a `train()` function that handles the full pipeline:
 data splitting → dataset creation → training with validation → checkpointing.
+
+Key changes from the original BERT + cross-entropy baseline:
+  - TranscriptNERModel (DeBERTa encoder + CRF) replaces BertForTokenClassification
+  - FocalCRFLoss replaces weighted cross-entropy (better handling of O imbalance)
+  - Cosine LR schedule replaces linear decay
+  - AutoTokenizer replaces BertTokenizerFast (DeBERTa uses SentencePiece)
 
 Can be run as a script or imported into a Colab notebook.
 """
@@ -17,9 +23,8 @@ import torch
 from seqeval.metrics import f1_score as seqeval_f1
 from torch.utils.data import DataLoader
 from transformers import (
-    BertForTokenClassification,
-    BertTokenizerFast,
-    get_linear_schedule_with_warmup,
+    AutoTokenizer,
+    get_cosine_schedule_with_warmup,
 )
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -47,6 +52,7 @@ from .config import (
 )
 from .data_split import save_split_info, split_by_template
 from .dataset import TranscriptNERDataset
+from .ner_model import FocalCRFLoss, TranscriptNERModel
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────
@@ -59,21 +65,30 @@ def _set_seed(seed: int):
         torch.cuda.manual_seed_all(seed)
 
 
-def _decode_predictions(logits, labels):
-    """Convert batched logits + labels into lists of BIO tag strings,
-    ignoring positions where label == -100."""
-    preds = torch.argmax(logits, dim=-1)  # (B, L)
-    true_batch, pred_batch = [], []
+def _decode_predictions_crf(crf_paths, labels):
+    """Convert CRF Viterbi paths + labels into lists of BIO tag strings,
+    ignoring positions where label == -100 (special tokens / padding).
 
-    for i in range(labels.size(0)):
+    Args:
+        crf_paths: list[list[int]] — Viterbi-decoded label IDs, one per batch item.
+                   Length of each inner list equals seq_len (including padding positions).
+        labels:    (B, L) tensor with -100 for ignored positions.
+
+    Returns:
+        (true_batch, pred_batch): lists of lists of BIO strings.
+    """
+    true_batch, pred_batch = [], []
+    for i, path in enumerate(crf_paths):
         true_seq, pred_seq = [], []
         for j in range(labels.size(1)):
             if labels[i, j].item() != -100:
                 true_seq.append(ID_TO_LABEL[labels[i, j].item()])
-                pred_seq.append(ID_TO_LABEL[preds[i, j].item()])
+                # CRF path may be shorter than seq_len if mask cuts it;
+                # guard with a bounds check.
+                pred_label = ID_TO_LABEL[path[j]] if j < len(path) else "O"
+                pred_seq.append(pred_label)
         true_batch.append(true_seq)
         pred_batch.append(pred_seq)
-
     return true_batch, pred_batch
 
 
@@ -123,7 +138,8 @@ def train(
         f"({len(split_info['test_templates'])} templates)"
     )
 
-    tokenizer = BertTokenizerFast.from_pretrained(MODEL_NAME)
+    # AutoTokenizer handles both BERT (WordPiece) and DeBERTa (SentencePiece)
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 
     print("Tokenising datasets...")
     train_ds = TranscriptNERDataset(train_samples, tokenizer, MAX_SEQ_LEN, STRIDE)
@@ -135,8 +151,7 @@ def train(
 
     # ── Class weights (inverse frequency) ────────────────────────────
     # BIO labels are heavily imbalanced: O is ~70% of tokens while
-    # B-SEM is <1%. Upweighting rare entity classes improves recall
-    # on semester detection without hurting overall accuracy.
+    # B-SEM is <1%. Upweighting rare entity classes improves recall.
     print("Computing class weights...")
     label_counts = np.zeros(NUM_LABELS, dtype=np.float64)
     for batch in train_loader:
@@ -144,8 +159,6 @@ def train(
         for label_id in labels_flat:
             if label_id != -100:
                 label_counts[label_id] += 1
-    # Inverse frequency: weight_i = total / (n_classes * count_i)
-    # Clamp to avoid division by zero for unseen labels.
     total = label_counts.sum()
     label_counts = np.maximum(label_counts, 1.0)
     class_weights = total / (NUM_LABELS * label_counts)
@@ -154,18 +167,21 @@ def train(
     print("  Class weights:", {ID_TO_LABEL[i]: f"{class_weights[i]:.2f}" for i in range(NUM_LABELS)})
 
     # ── Model ─────────────────────────────────────────────────────────
-    print(f"Loading {MODEL_NAME}...")
-    model = BertForTokenClassification.from_pretrained(
-        MODEL_NAME,
+    print(f"Loading {MODEL_NAME} + CRF...")
+    model = TranscriptNERModel(
+        model_name=MODEL_NAME,
         num_labels=NUM_LABELS,
-        id2label=ID_TO_LABEL,
-        label2id=LABEL_TO_ID,
+        dropout=0.1,
     )
     model.to(device)
-    # Override the built-in loss with a weighted version so rare SEM/CODE
-    # tags are not overwhelmed by the majority O class.
-    _loss_fct = torch.nn.CrossEntropyLoss(
-        weight=class_weights_tensor, ignore_index=-100
+
+    # FocalCRFLoss: CRF NLL scaled by focal weighting on emission probabilities.
+    # This combines the sequence-constraint benefit of CRF with focal loss's
+    # down-weighting of easy O tokens, focusing training on hard entity boundaries.
+    loss_fn = FocalCRFLoss(
+        crf=model.crf,
+        gamma=2.0,
+        alpha=class_weights_tensor,
     )
 
     # ── Optimiser & scheduler ─────────────────────────────────────────
@@ -190,7 +206,8 @@ def train(
 
     total_steps = len(train_loader) * num_epochs
     warmup_steps = int(total_steps * warmup_ratio)
-    scheduler = get_linear_schedule_with_warmup(
+    # Cosine schedule: smoother decay than linear, better late-training convergence
+    scheduler = get_cosine_schedule_with_warmup(
         optimizer, warmup_steps, total_steps,
     )
 
@@ -224,14 +241,14 @@ def train(
             labels = batch["labels"].to(device)
 
             with torch.amp.autocast("cuda", enabled=use_fp16):
-                outputs = model(
+                # TranscriptNERModel.forward() returns (loss, emissions) in train mode
+                loss, emissions = model(
                     input_ids=input_ids,
                     attention_mask=attention_mask,
+                    labels=labels,
                 )
-                loss = _loss_fct(
-                    outputs.logits.view(-1, NUM_LABELS),
-                    labels.view(-1),
-                )
+                # Apply focal CRF loss using the same emissions
+                loss = loss_fn(emissions, labels, attention_mask.bool())
 
             scaler.scale(loss).backward()
             scaler.unscale_(optimizer)
@@ -264,19 +281,17 @@ def train(
                 labels = batch["labels"].to(device)
 
                 with torch.amp.autocast("cuda", enabled=use_fp16):
-                    outputs = model(
+                    # Inference mode: returns (Viterbi paths, emissions)
+                    crf_paths, emissions = model(
                         input_ids=input_ids,
                         attention_mask=attention_mask,
                     )
-                    val_loss = _loss_fct(
-                        outputs.logits.view(-1, NUM_LABELS),
-                        labels.view(-1),
-                    )
+                    val_loss = loss_fn(emissions, labels, attention_mask.bool())
 
                 val_loss_sum += val_loss.item()
                 val_steps += 1
 
-                true_batch, pred_batch = _decode_predictions(outputs.logits, labels)
+                true_batch, pred_batch = _decode_predictions_crf(crf_paths, labels)
                 all_true.extend(true_batch)
                 all_pred.extend(pred_batch)
 
@@ -287,11 +302,11 @@ def train(
         correct = sum(
             t == p for ts, ps in zip(all_true, all_pred) for t, p in zip(ts, ps)
         )
-        total = sum(len(ts) for ts in all_true)
-        val_acc = correct / total if total else 0.0
+        total_toks = sum(len(ts) for ts in all_true)
+        val_acc = correct / total_toks if total_toks else 0.0
         history["val_token_acc"].append(val_acc)
 
-        # Entity F1
+        # Entity F1 (seqeval)
         val_f1 = seqeval_f1(all_true, all_pred)
         history["val_entity_f1"].append(val_f1)
 

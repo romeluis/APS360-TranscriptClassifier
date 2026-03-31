@@ -446,6 +446,17 @@ def generate_noise_line():
         "Annual GPA",
         f"https://acorn.utoronto.ca/sws/#/history/academic Page {page_n} of {page_total}",
         f"Academic History - ACORN {now_year}-{now_month:02d}-{now_day:02d}, {hour12}:{now_min:02d} {am_pm}",
+        # Transfer credit context — teaches the model that CRT-graded rows before
+        # "Beginning of Undergraduate Record" are O tokens (not entity rows)
+        f"Transfer Credit from {institution} Applied Toward Program",
+        f"Transfer Credit from {institution}",
+        "Beginning of Undergraduate Record",
+        "Course Trans GPA: 0.000",
+        f"Transfer Totals: {random.randint(1,8)}.000",
+        "Academic Standing: Clear",
+        "Repeated - Included in GPA",
+        "Combined GPA",
+        "Term GPA",
     ]
     return random.choice(noise_templates)
 

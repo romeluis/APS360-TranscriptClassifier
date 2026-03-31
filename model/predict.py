@@ -1,17 +1,24 @@
 """
-Inference for the BERT NER model.
+Inference for the TranscriptNER model (DeBERTa + CRF).
 
-Provides `BertNERPredictor` which implements the same interface expected by
+Provides `BertNERPredictor` which keeps the same external interface expected by
 the evaluation framework: `predict(tokens: list[str]) -> list[str]`.
 
-Handles subword-to-whitespace-token realignment and sliding-window merging
-for long transcripts.
+Key changes from the BERT baseline:
+  - AutoTokenizer instead of BertTokenizerFast (DeBERTa uses SentencePiece)
+  - TranscriptNERModel.from_pretrained() instead of BertForTokenClassification
+  - CRF Viterbi decode instead of argmax
+  - Weighted multi-window vote: softmax distributions are averaged across all
+    overlapping windows (centrality-weighted) before argmax, rather than
+    winner-take-all confidence scoring
 """
 
+import numpy as np
 import torch
-from transformers import BertForTokenClassification, BertTokenizerFast
+from transformers import AutoTokenizer
 
-from .config import BEST_CHECKPOINT_DIR, ID_TO_LABEL, MAX_SEQ_LEN, STRIDE
+from .config import BEST_CHECKPOINT_DIR, ID_TO_LABEL, MAX_SEQ_LEN, NUM_LABELS, STRIDE
+from .ner_model import TranscriptNERModel
 
 
 class BertNERPredictor:
@@ -26,9 +33,8 @@ class BertNERPredictor:
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.device = torch.device(device)
 
-        self.tokenizer = BertTokenizerFast.from_pretrained(checkpoint_dir)
-        self.model = BertForTokenClassification.from_pretrained(checkpoint_dir)
-        self.model.to(self.device)
+        self.tokenizer = AutoTokenizer.from_pretrained(checkpoint_dir)
+        self.model = TranscriptNERModel.from_pretrained(checkpoint_dir, device=self.device)
         self.model.eval()
 
     @torch.no_grad()
@@ -63,11 +69,9 @@ class BertNERPredictor:
         input_ids = encoding["input_ids"].to(self.device)
         attention_mask = encoding["attention_mask"].to(self.device)
 
-        logits = self.model(
-            input_ids=input_ids, attention_mask=attention_mask,
-        ).logits[0]  # (seq_len, num_labels)
-
-        pred_ids = torch.argmax(logits, dim=-1).cpu().tolist()
+        # CRF returns list[list[int]] — one path per batch item
+        crf_paths, _ = self.model(input_ids=input_ids, attention_mask=attention_mask)
+        pred_ids = crf_paths[0]  # single-window: first (only) path
         word_ids = encoding.word_ids(batch_index=0)
 
         return self._realign(tokens, word_ids, pred_ids)
@@ -77,41 +81,55 @@ class BertNERPredictor:
     # ------------------------------------------------------------------ #
 
     def _predict_multiwindow(self, tokens, encoding, num_windows):
+        """Weighted average of softmax distributions across all overlapping windows.
+
+        For each whitespace token, accumulate centrality-weighted softmax
+        probability vectors from every window that contains it, then take argmax
+        of the averaged distribution.  This is more informative than winner-take-all
+        because evidence from multiple windows is combined rather than discarded.
+
+        Centrality weight ∈ [0.5, 1.5]: tokens near the centre of a window get
+        higher weight (more context on both sides) than tokens near the edges.
+        """
         input_ids = encoding["input_ids"].to(self.device)
         attention_mask = encoding["attention_mask"].to(self.device)
 
-        all_logits = self.model(
-            input_ids=input_ids, attention_mask=attention_mask,
-        ).logits  # (num_windows, seq_len, num_labels)
+        # Get emissions (logits) from encoder — shape (num_windows, seq_len, num_labels)
+        _, emissions = self.model(input_ids=input_ids, attention_mask=attention_mask)
+        all_probs = torch.softmax(emissions, dim=-1).cpu().numpy()  # (W, L, C)
 
-        # For each whitespace token, collect (confidence, label_id) from all
-        # windows; keep the one from the most-centred subword position.
         n_tokens = len(tokens)
-        best = [(-1.0, 0)] * n_tokens  # (score, label_id)
+        token_prob_sum = np.zeros((n_tokens, NUM_LABELS), dtype=np.float64)
+        token_weight_sum = np.zeros(n_tokens, dtype=np.float64)
+
+        centre = MAX_SEQ_LEN / 2.0
 
         for win_idx in range(num_windows):
             word_ids = encoding.word_ids(batch_index=win_idx)
-            logits = all_logits[win_idx]  # (seq_len, num_labels)
-            confs = logits.softmax(dim=-1).cpu()
-
+            probs = all_probs[win_idx]  # (seq_len, num_labels)
             seen = set()
+
             for pos, word_id in enumerate(word_ids):
-                if word_id is None or word_id in seen:
+                if word_id is None or word_id >= n_tokens or word_id in seen:
                     continue
                 seen.add(word_id)
 
-                pred_id = int(torch.argmax(logits[pos]).item())
-                conf = confs[pos, pred_id].item()
-
-                # Prefer predictions from positions closer to centre
-                centre = MAX_SEQ_LEN // 2
+                # Centrality: 1.0 at centre, 0.0 at edge; shift to [0.5, 1.5]
                 centrality = 1.0 - abs(pos - centre) / centre
-                score = conf + 0.1 * centrality
+                weight = centrality + 0.5
 
-                if score > best[word_id][0]:
-                    best[word_id] = (score, pred_id)
+                token_prob_sum[word_id] += weight * probs[pos]
+                token_weight_sum[word_id] += weight
 
-        predictions = [ID_TO_LABEL[label_id] for _, label_id in best]
+        # Average over contributing windows and decode
+        predictions = []
+        for i in range(n_tokens):
+            if token_weight_sum[i] > 0:
+                avg_probs = token_prob_sum[i] / token_weight_sum[i]
+                predictions.append(ID_TO_LABEL[int(np.argmax(avg_probs))])
+            else:
+                predictions.append("O")
+
         return self._fix_bio_consistency(predictions)
 
     # ------------------------------------------------------------------ #
@@ -120,15 +138,16 @@ class BertNERPredictor:
 
     @staticmethod
     def _realign(tokens, word_ids, pred_ids):
-        """Map subword predictions back to one tag per whitespace token."""
+        """Map subword predictions (CRF path) back to one tag per whitespace token."""
         n = len(tokens)
         tags = ["O"] * n
         seen = set()
         for pos, word_id in enumerate(word_ids):
-            if word_id is None or word_id in seen:
+            if word_id is None or word_id >= n or word_id in seen:
                 continue
             seen.add(word_id)
-            tags[word_id] = ID_TO_LABEL[pred_ids[pos]]
+            if pos < len(pred_ids):
+                tags[word_id] = ID_TO_LABEL[pred_ids[pos]]
 
         return BertNERPredictor._fix_bio_consistency(tags)
 
@@ -138,7 +157,11 @@ class BertNERPredictor:
 
     @staticmethod
     def _fix_bio_consistency(tags: list[str]) -> list[str]:
-        """Fix I-tags not preceded by a matching B- or I- tag."""
+        """Fix I-tags not preceded by a matching B- or I- tag.
+
+        CRF should prevent most of these, but this is a safety net for
+        edge cases at window boundaries in the multi-window path.
+        """
         fixed = list(tags)
         for i, tag in enumerate(fixed):
             if tag.startswith("I-"):
