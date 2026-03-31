@@ -77,21 +77,18 @@ class TranscriptNERModel(nn.Module):
         crf_mask = attention_mask.bool()  # (batch, seq_len)
 
         if labels is not None:
-            # Replace -100 (ignored subword / special token positions) with 0
-            # so CRF doesn't see out-of-range indices. The valid_mask below
-            # excludes those positions from the CRF log-likelihood computation.
+            # Replace -100 (ignored subword / special token positions) with 0 (O label)
+            # so CRF doesn't see out-of-range indices.
             crf_labels = labels.clone()
             crf_labels[crf_labels == -100] = 0
 
-            # valid_mask: positions that are (a) not padding and (b) not ignored (-100)
-            valid_mask = (labels != -100) & crf_mask  # (batch, seq_len)
-
-            # CRF negative log-likelihood (averaged over valid tokens, not batch size).
-            # torchcrf reduction="mean" divides by batch size only, giving ~659 nats/seq
-            # for a random model → loss ≈ 500 → bf16 gradient overflow → NaN.
-            # Dividing by num_valid tokens keeps the scale comparable to CE (~2–3).
-            num_valid = valid_mask.sum().clamp(min=1)
-            loss = -self.crf(emissions_fp32, crf_labels, mask=valid_mask, reduction="sum") / num_valid
+            # Use attention_mask (contiguous prefix) for CRF, not a per-real-token mask.
+            # torchcrf requires mask[:, 0].all() and computes seq_ends via mask.sum()-1,
+            # both of which break with a non-contiguous mask (True only at first-subword
+            # positions). CLS/SEP/continuation subwords get label O via substitution above;
+            # the CE loss (ignore_index=-100) handles real-token supervision exclusively.
+            num_crf_tokens = crf_mask.sum().clamp(min=1)
+            loss = -self.crf(emissions_fp32, crf_labels, mask=crf_mask, reduction="sum") / num_crf_tokens
             # Also Viterbi decode in the same pass (used for val metrics without
             # a second forward call — decode is cheap compared to encoder forward)
             predictions = self.crf.decode(emissions_fp32, mask=crf_mask)
