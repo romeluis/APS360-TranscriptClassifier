@@ -22,7 +22,10 @@ Why DeBERTa-v3-base?
 import torch
 import torch.nn as nn
 from transformers import AutoModel
-from TorchCRF import CRF
+try:
+    from TorchCRF import CRF          # installed as 'TorchCRF' (local)
+except ImportError:
+    from torchcrf import CRF           # installed as 'pytorch-crf' (Colab)
 
 from model.config import MODEL_NAME, NUM_LABELS
 

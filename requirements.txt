@@ -17,4 +17,4 @@ numpy>=1.24.0
 # BERT NER Model
 torch>=2.0.0
 transformers>=4.35.0
-pytorch-crf>=0.7.2
+pytorch-crf>=0.7.2   # provides 'torchcrf' (Colab); locally may be 'TorchCRF' — both work
