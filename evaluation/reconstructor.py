@@ -22,6 +22,7 @@ def _is_plausible_semester(name: str) -> bool:
       "https://acorn..."  (URL footer)
     Accepts:
       "Fall 2021", "2021 Fall", "Winter 2022", "2025 Summer"
+      "Fall", "Winter", "Summer", "Spring"  (season-only, from ACORN-style headers)
     """
     if any(s in name for s in ("http", "://", "AM", "PM")):
         return False
@@ -34,15 +35,15 @@ def _is_plausible_semester(name: str) -> bool:
     # or "Dean's Honour List" — these are O-context occurrences of year+season
     if re.search(r"(In\s+Progress|Dean|Honours?|Honour\s+List)", name, re.IGNORECASE):
         return False
-    # Must contain a year in plausible academic range
-    years = re.findall(r"\b(19\d{2}|20\d{2})\b", name)
-    if not years or not (1990 <= int(years[0]) <= 2035):
-        return False
     # Must contain a recognized season word
     if not any(s in name.lower() for s in _SEASONS):
         return False
-    # 1–5 tokens (e.g. "Fall 2021" = 2, "2021 Fall" = 2, "Fall 2021 - " = 3)
+    # 1–5 tokens
     if not (1 <= len(name.split()) <= 5):
+        return False
+    # If a year is present it must be in plausible academic range
+    years = re.findall(r"\b(19\d{2}|20\d{2})\b", name)
+    if years and not (1990 <= int(years[0]) <= 2035):
         return False
     return True
 

@@ -66,16 +66,13 @@ def _set_seed(seed: int):
 
 
 def _decode_predictions_crf(crf_paths, labels):
-    """Convert compact CRF Viterbi paths + labels into lists of BIO tag strings.
-
-    The model now returns *compact* Viterbi paths — one entry per first-subword
-    token (positions where label != -100), not one entry per full sequence
-    position.  We walk through the full label tensor and advance a separate
-    index k into the compact path for each real token.
+    """Convert full-sequence CRF Viterbi paths + labels into lists of BIO tag strings,
+    ignoring positions where label == -100 (special tokens / padding / continuations).
 
     Args:
-        crf_paths: list[list[int]] — compact Viterbi-decoded label IDs.
-                   len(path[i]) == number of first-subword tokens in sequence i.
+        crf_paths: list[list[int]] — Viterbi-decoded label IDs, one per batch item.
+                   Length of each inner list equals the number of attended positions
+                   (sum of attention_mask), so path[j] aligns with sequence position j.
         labels:    (B, L) tensor with -100 for ignored positions.
 
     Returns:
@@ -84,13 +81,11 @@ def _decode_predictions_crf(crf_paths, labels):
     true_batch, pred_batch = [], []
     for i, path in enumerate(crf_paths):
         true_seq, pred_seq = [], []
-        k = 0  # index into the compact path for this sequence
         for j in range(labels.size(1)):
             if labels[i, j].item() != -100:
                 true_seq.append(ID_TO_LABEL[labels[i, j].item()])
-                pred_label = ID_TO_LABEL[path[k]] if k < len(path) else "O"
+                pred_label = ID_TO_LABEL[path[j]] if j < len(path) else "O"
                 pred_seq.append(pred_label)
-                k += 1
         true_batch.append(true_seq)
         pred_batch.append(pred_seq)
     return true_batch, pred_batch
@@ -150,9 +145,15 @@ def train(
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 
     print("Tokenising datasets...")
-    train_ds = TranscriptNERDataset(train_samples, tokenizer, MAX_SEQ_LEN, STRIDE)
-    val_ds = TranscriptNERDataset(val_samples, tokenizer, MAX_SEQ_LEN, STRIDE)
-    print(f"  Train windows: {len(train_ds)}  |  Val windows: {len(val_ds)}")
+    train_ds = TranscriptNERDataset(
+        train_samples, tokenizer, MAX_SEQ_LEN, STRIDE,
+        augment=True, augment_seed=seed,
+    )
+    val_ds = TranscriptNERDataset(
+        val_samples, tokenizer, MAX_SEQ_LEN, STRIDE,
+        augment=False,
+    )
+    print(f"  Train samples: {len(train_ds)}  |  Val windows: {len(val_ds)}")
 
     train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_ds, batch_size=batch_size)
@@ -182,7 +183,7 @@ def train(
     model = TranscriptNERModel(
         model_name=MODEL_NAME,
         num_labels=NUM_LABELS,
-        dropout=0.1,
+        dropout=0.2,
     )
     model.to(device)
     # DeBERTa-v3's ConvLayer stores its weights as FP16 (.half() hardcoded).
@@ -203,7 +204,7 @@ def train(
     # penalises wrong per-token predictions and handles class imbalance.
     # Using weight=0.1 so CE doesn't overwhelm the CRF sequence loss.
     _ce_loss_fct = torch.nn.CrossEntropyLoss(
-        weight=class_weights_tensor, ignore_index=-100
+        weight=class_weights_tensor, ignore_index=-100, label_smoothing=0.1,
     )
 
     # ── Optimiser & scheduler ─────────────────────────────────────────

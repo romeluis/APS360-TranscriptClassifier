@@ -32,11 +32,11 @@ STRIDE = 64           # smaller stride = more overlap, fewer semesters lost at w
 
 BATCH_SIZE = 48   # DeBERTa-v3-base on A100 (40GB): 48 fits well; drop to 16 for T4
 LEARNING_RATE = 3e-5
-NUM_EPOCHS = 15       # extra epochs for larger dataset; early stopping still triggers at patience=5
+NUM_EPOCHS = 15       # extra epochs for larger dataset; early stopping still triggers
 WARMUP_RATIO = 0.1
 WEIGHT_DECAY = 0.01
 MAX_GRAD_NORM = 1.0
-EARLY_STOPPING_PATIENCE = 5
+EARLY_STOPPING_PATIENCE = 7  # previous run was interrupted at patience=3; allow more convergence
 
 # ── Data split (by template) ─────────────────────────────────────────────
 

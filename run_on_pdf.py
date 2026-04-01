@@ -15,7 +15,9 @@ No ground-truth labels are needed; this works on any unseen PDF.
 """
 
 import argparse
+import re
 import sys
+import unicodedata
 from pathlib import Path
 
 # ── Ensure project root is on sys.path so model/evaluation imports work ──
@@ -25,6 +27,12 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from pypdf import PdfReader
 from model.predict import BertNERPredictor
 from evaluation.reconstructor import reconstruct_semesters
+
+try:
+    import pdfplumber
+    _PDFPLUMBER = True
+except ImportError:
+    _PDFPLUMBER = False
 
 # ANSI colours (same as visualize.py)
 BOLD  = "\033[1m"
@@ -44,15 +52,60 @@ except ImportError:
 # PDF text extraction
 # ---------------------------------------------------------------------------
 
+def _normalize_text(text: str) -> str:
+    """Normalize extracted PDF text before tokenization.
+
+    1. NFC unicode normalization: decomposes ligatures (ﬁ→fi, ﬀ→ff) and
+       normalizes composed characters to their canonical form so the tokenizer
+       never sees rare unicode codepoints absent from pretraining.
+    2. Strip non-printable / control characters (except \\n and \\t): PDF
+       extraction can embed form-feed, null bytes, or other control chars
+       that split tokens unexpectedly.
+    3. Collapse runs of multiple spaces on the same line (preserve newlines
+       as structural separators between semester/course rows).
+    """
+    # NFC normalization decomposes ligatures and normalises accented chars
+    text = unicodedata.normalize("NFC", text)
+    # Remove control characters except tab and newline
+    text = re.sub(r"[^\x09\x0a\x20-\x7e\x80-\xff]", " ", text)
+    # Collapse multiple spaces per line; preserve newlines
+    lines = [re.sub(r" {2,}", " ", line).strip() for line in text.split("\n")]
+    return "\n".join(lines)
+
+
 def extract_text_from_pdf(pdf_path: str) -> str:
-    """Extract all text from a PDF, page by page, joined with spaces."""
-    reader = PdfReader(pdf_path)
-    pages = []
-    for page in reader.pages:
-        text = page.extract_text()
-        if text:
-            pages.append(text)
-    return "\n".join(pages)
+    """Extract text from a PDF using pdfplumber (preferred) or pypdf (fallback).
+
+    pdfplumber uses character bounding boxes to reconstruct layout-aware text
+    with proper line breaks, which preserves the tabular row structure of
+    academic transcripts better than pypdf's character-order concatenation.
+    """
+    text = None
+
+    if _PDFPLUMBER:
+        try:
+            with pdfplumber.open(pdf_path) as pdf:
+                pages = []
+                for page in pdf.pages:
+                    page_text = page.extract_text(x_tolerance=3, y_tolerance=3)
+                    if page_text:
+                        pages.append(page_text)
+            if pages:
+                text = "\n".join(pages)
+        except Exception as e:
+            print(f"  pdfplumber failed ({e}); falling back to pypdf")
+            text = None
+
+    if text is None:
+        reader = PdfReader(pdf_path)
+        pages = []
+        for page in reader.pages:
+            page_text = page.extract_text()
+            if page_text:
+                pages.append(page_text)
+        text = "\n".join(pages)
+
+    return _normalize_text(text)
 
 
 # ---------------------------------------------------------------------------

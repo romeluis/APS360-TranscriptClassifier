@@ -77,40 +77,19 @@ class TranscriptNERModel(nn.Module):
         crf_mask = attention_mask.bool()  # (batch, seq_len)
 
         if labels is not None:
-            # ── Compact to first-subword positions only ───────────────
-            # labels == -100 at CLS/SEP/padding/continuation-subword positions.
-            # Training the CRF on ALL positions forces it to model transitions like
-            # B-CODE → O(continuation) → I-CODE, which are invalid BIO sequences and
-            # create conflicting gradients with the auxiliary CE loss.
-            # Instead, gather only the positions where label != -100 (i.e. the first
-            # subword of each whitespace token) into a contiguous compact tensor.
-            # torchcrf requires mask[:, 0].all() — compact_mask satisfies this because
-            # every sequence has at least one real token.
-            first_subword_mask = (labels != -100)            # (B, L) bool
-            real_lengths = first_subword_mask.sum(dim=1)     # (B,)
-            max_real_len = int(real_lengths.max().item())
+            # Replace -100 (ignored subword / special token positions) with 0 (O label)
+            # so CRF doesn't see out-of-range indices.
+            crf_labels = labels.clone()
+            crf_labels[crf_labels == -100] = 0
 
-            batch_size = labels.size(0)
-            compact_emissions = emissions_fp32.new_zeros(batch_size, max_real_len, self.num_labels)
-            compact_labels    = labels.new_zeros(batch_size, max_real_len)
-            compact_mask      = torch.zeros(batch_size, max_real_len,
-                                            dtype=torch.bool, device=labels.device)
-
-            for i in range(batch_size):
-                idx = first_subword_mask[i].nonzero(as_tuple=True)[0]
-                n = idx.size(0)
-                if n > 0:
-                    compact_emissions[i, :n] = emissions_fp32[i, idx]
-                    compact_labels[i, :n]    = labels[i, idx]
-                    compact_mask[i, :n]      = True
-
-            num_real_tokens = compact_mask.sum().clamp(min=1)
-            loss = -self.crf(compact_emissions, compact_labels,
-                             mask=compact_mask, reduction="sum") / num_real_tokens
-            # Viterbi decode on the same compact sequences (one prediction per
-            # first-subword token); _decode_predictions_crf in train.py uses a
-            # separate index to map these back to label positions.
-            predictions = self.crf.decode(compact_emissions, mask=compact_mask)
+            # Use contiguous attention_mask for CRF (TorchCRF requires mask[:, 0].all()).
+            # Continuation subwords and special tokens get label O via the substitution
+            # above; the auxiliary CE loss (ignore_index=-100) handles real-token
+            # supervision exclusively. This keeps training and inference identical —
+            # both decode on the full attention-masked sequence.
+            num_crf_tokens = crf_mask.sum().clamp(min=1)
+            loss = -self.crf(emissions_fp32, crf_labels, mask=crf_mask, reduction="sum") / num_crf_tokens
+            predictions = self.crf.decode(emissions_fp32, mask=crf_mask)
             return loss, emissions_fp32, predictions
 
         else:
