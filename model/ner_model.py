@@ -22,7 +22,7 @@ Why DeBERTa-v3-base?
 import torch
 import torch.nn as nn
 from transformers import AutoModel
-from torchcrf import CRF
+from TorchCRF import CRF
 
 from model.config import MODEL_NAME, NUM_LABELS
 
