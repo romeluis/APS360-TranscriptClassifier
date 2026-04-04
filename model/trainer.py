@@ -1,20 +1,17 @@
 """
 Training loop for the TranscriptNER model (DeBERTa-v3-base + CRF).
 
-Provides a `train()` function that handles the full pipeline:
-data splitting → dataset creation → training with validation → checkpointing.
+Handles: data splitting -> dataset creation -> training with validation -> checkpointing.
 
-Key changes from the original BERT + cross-entropy baseline:
-  - TranscriptNERModel (DeBERTa encoder + CRF) replaces BertForTokenClassification
-  - FocalCRFLoss replaces weighted cross-entropy (better handling of O imbalance)
-  - Cosine LR schedule replaces linear decay
-  - AutoTokenizer replaces BertTokenizerFast (DeBERTa uses SentencePiece)
-
-Can be run as a script or imported into a Colab notebook.
+Optimizations:
+  - BF16 autocast on CUDA
+  - torch.compile on encoder (CRF has Python control flow, can't compile)
+  - pin_memory + num_workers for GPU data loading
+  - Cosine LR schedule with warmup
+  - Early stopping on validation entity F1
 """
 
 import json
-import sys
 import time
 from pathlib import Path
 
@@ -22,13 +19,7 @@ import numpy as np
 import torch
 from seqeval.metrics import f1_score as seqeval_f1
 from torch.utils.data import DataLoader
-from transformers import (
-    AutoTokenizer,
-    get_cosine_schedule_with_warmup,
-)
-
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(_PROJECT_ROOT))
+from transformers import AutoTokenizer, get_cosine_schedule_with_warmup
 
 from .config import (
     BATCH_SIZE,
@@ -50,12 +41,8 @@ from .config import (
     WARMUP_RATIO,
     WEIGHT_DECAY,
 )
-from .data_split import save_split_info, split_by_template
-from .dataset import TranscriptNERDataset
-from .ner_model import TranscriptNERModel
-
-
-# ── Helpers ───────────────────────────────────────────────────────────────
+from .architecture import TranscriptNERModel
+from .dataset import TranscriptNERDataset, split_by_template
 
 
 def _set_seed(seed: int):
@@ -66,18 +53,7 @@ def _set_seed(seed: int):
 
 
 def _decode_predictions_crf(crf_paths, labels):
-    """Convert full-sequence CRF Viterbi paths + labels into lists of BIO tag strings,
-    ignoring positions where label == -100 (special tokens / padding / continuations).
-
-    Args:
-        crf_paths: list[list[int]] — Viterbi-decoded label IDs, one per batch item.
-                   Length of each inner list equals the number of attended positions
-                   (sum of attention_mask), so path[j] aligns with sequence position j.
-        labels:    (B, L) tensor with -100 for ignored positions.
-
-    Returns:
-        (true_batch, pred_batch): lists of lists of BIO strings.
-    """
+    """Convert CRF Viterbi paths + labels into BIO tag string lists."""
     true_batch, pred_batch = [], []
     for i, path in enumerate(crf_paths):
         true_seq, pred_seq = [], []
@@ -91,9 +67,6 @@ def _decode_predictions_crf(crf_paths, labels):
     return true_batch, pred_batch
 
 
-# ── Main training function ────────────────────────────────────────────────
-
-
 def train(
     data_dir: str = DATA_DIR,
     output_dir: str = CHECKPOINT_DIR,
@@ -103,45 +76,36 @@ def train(
     warmup_ratio: float = WARMUP_RATIO,
     weight_decay: float = WEIGHT_DECAY,
     seed: int = SEED,
-    use_fp16: bool = True,
     log_every: int = 5,
 ) -> dict:
     """Full training pipeline. Returns training history dict."""
 
     _set_seed(seed)
+
     if torch.cuda.is_available():
         device = torch.device("cuda")
-    elif torch.backends.mps.is_available():
+    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
         device = torch.device("mps")
     else:
         device = torch.device("cpu")
-    # DeBERTa-v3 has internal FP16 parameters that break GradScaler.
-    # On A100/H100 use bfloat16 instead — same dynamic range as fp32, no scaling needed.
-    # On older GPUs (T4, V100) fall back to fp32 (use_fp16=False).
-    use_fp16 = False  # disabled; we use bf16 autocast below
+
     use_bf16 = device.type == "cuda" and torch.cuda.is_bf16_supported()
     print(f"Device: {device}  |  bf16: {use_bf16}")
 
-    # ── Data ──────────────────────────────────────────────────────────
+    # ── Data ──────���───────────────────────────────────────────────────
     print("Loading and splitting data...")
     train_samples, val_samples, test_samples, split_info = split_by_template(
         data_dir=data_dir, seed=seed,
     )
-    save_split_info(split_info, str(Path(output_dir) / "split_info.json"))
-    print(
-        f"  Train: {split_info['train_samples']} samples "
-        f"({len(split_info['train_templates'])} templates)"
-    )
-    print(
-        f"  Val:   {split_info['val_samples']} samples "
-        f"({len(split_info['val_templates'])} templates)"
-    )
-    print(
-        f"  Test:  {split_info['test_samples']} samples "
-        f"({len(split_info['test_templates'])} templates)"
-    )
 
-    # AutoTokenizer handles both BERT (WordPiece) and DeBERTa (SentencePiece)
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+    with open(Path(output_dir) / "split_info.json", "w") as f:
+        json.dump(split_info, f, indent=2)
+
+    print(f"  Train: {split_info['train_samples']} samples ({len(split_info['train_templates'])} templates)")
+    print(f"  Val:   {split_info['val_samples']} samples ({len(split_info['val_templates'])} templates)")
+    print(f"  Test:  {split_info['test_samples']} samples ({len(split_info['test_templates'])} templates)")
+
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 
     print("Tokenising datasets...")
@@ -155,12 +119,17 @@ def train(
     )
     print(f"  Train samples: {len(train_ds)}  |  Val windows: {len(val_ds)}")
 
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(val_ds, batch_size=batch_size)
+    use_gpu_loader = device.type == "cuda"
+    train_loader = DataLoader(
+        train_ds, batch_size=batch_size, shuffle=True,
+        pin_memory=use_gpu_loader, num_workers=4 if use_gpu_loader else 0,
+    )
+    val_loader = DataLoader(
+        val_ds, batch_size=batch_size,
+        pin_memory=use_gpu_loader, num_workers=4 if use_gpu_loader else 0,
+    )
 
-    # ── Class weights (inverse frequency) ────────────────────────────
-    # BIO labels are heavily imbalanced: O is ~70% of tokens while
-    # B-SEM is <1%. Upweighting rare entity classes improves recall.
+    # ── Class weights (inverse frequency, capped at 10x) ─────────────
     print("Computing class weights...")
     label_counts = np.zeros(NUM_LABELS, dtype=np.float64)
     for batch in train_loader:
@@ -170,39 +139,34 @@ def train(
                 label_counts[label_id] += 1
     total = label_counts.sum()
     label_counts = np.maximum(label_counts, 1.0)
-    class_weights = total / (NUM_LABELS * label_counts)
-    # Cap at 10× to prevent extreme gradients from very rare classes
-    # (e.g. I-GRADE computed to ~147×, which destabilises training).
-    class_weights = np.minimum(class_weights, 10.0)
+    class_weights = np.minimum(total / (NUM_LABELS * label_counts), 10.0)
     class_weights_tensor = torch.tensor(class_weights, dtype=torch.float32).to(device)
-    print("  Label counts:", {ID_TO_LABEL[i]: int(label_counts[i]) for i in range(NUM_LABELS)})
     print("  Class weights:", {ID_TO_LABEL[i]: f"{class_weights[i]:.2f}" for i in range(NUM_LABELS)})
 
     # ── Model ─────────────────────────────────────────────────────────
     print(f"Loading {MODEL_NAME} + CRF...")
-    model = TranscriptNERModel(
-        model_name=MODEL_NAME,
-        num_labels=NUM_LABELS,
-        dropout=0.2,
-    )
+    model = TranscriptNERModel(model_name=MODEL_NAME, num_labels=NUM_LABELS, dropout=0.2)
     model.to(device)
-    # DeBERTa-v3's ConvLayer stores its weights as FP16 (.half() hardcoded).
-    # Under BF16 autocast the backward accumulates BF16 gradients into FP16
-    # .grad tensors; BF16 values that exceed FP16's max (~65504) overflow to
-    # inf, which clip_grad_norm_ propagates as NaN to every parameter.
-    # Fix: promote any FP16 parameters to FP32 after moving to device.
-    _fp16_fixed = 0
+
+    # DeBERTa-v3's ConvLayer stores weights as FP16; promote to FP32
+    # to prevent BF16 gradient overflow.
+    fp16_fixed = 0
     for param in model.parameters():
         if param.dtype == torch.float16:
             param.data = param.data.float()
-            _fp16_fixed += 1
-    if _fp16_fixed:
-        print(f"  Promoted {_fp16_fixed} FP16 parameter tensor(s) to FP32.")
+            fp16_fixed += 1
+    if fp16_fixed:
+        print(f"  Promoted {fp16_fixed} FP16 parameter tensor(s) to FP32.")
 
-    # Auxiliary CE loss on emission logits (weighted by inverse class frequency).
-    # CRF NLL is the primary loss; CE is a small auxiliary signal that directly
-    # penalises wrong per-token predictions and handles class imbalance.
-    # Using weight=0.1 so CE doesn't overwhelm the CRF sequence loss.
+    # torch.compile on encoder only (CRF has Python control flow)
+    if device.type == "cuda" and hasattr(torch, "compile"):
+        try:
+            model.encoder = torch.compile(model.encoder)
+            print("  torch.compile applied to encoder.")
+        except Exception as e:
+            print(f"  torch.compile skipped: {e}")
+
+    # Auxiliary CE loss
     _ce_loss_fct = torch.nn.CrossEntropyLoss(
         weight=class_weights_tensor, ignore_index=-100, label_smoothing=0.1,
     )
@@ -211,17 +175,11 @@ def train(
     no_decay = {"bias", "LayerNorm.weight"}
     param_groups = [
         {
-            "params": [
-                p for n, p in model.named_parameters()
-                if not any(nd in n for nd in no_decay)
-            ],
+            "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
             "weight_decay": weight_decay,
         },
         {
-            "params": [
-                p for n, p in model.named_parameters()
-                if any(nd in n for nd in no_decay)
-            ],
+            "params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)],
             "weight_decay": 0.0,
         },
     ]
@@ -229,22 +187,10 @@ def train(
 
     total_steps = len(train_loader) * num_epochs
     warmup_steps = int(total_steps * warmup_ratio)
-    # Cosine schedule: smoother decay than linear, better late-training convergence
-    scheduler = get_cosine_schedule_with_warmup(
-        optimizer, warmup_steps, total_steps,
-    )
-
-    # GradScaler is only needed for fp16. bf16 has fp32 dynamic range → no scaling.
-    scaler = torch.amp.GradScaler(enabled=False)
+    scheduler = get_cosine_schedule_with_warmup(optimizer, warmup_steps, total_steps)
 
     # ── Training loop ─────────────────────────────────────────────────
-    history = {
-        "train_loss": [],
-        "val_loss": [],
-        "val_token_acc": [],
-        "val_entity_f1": [],
-    }
-
+    history = {"train_loss": [], "val_loss": [], "val_token_acc": [], "val_entity_f1": []}
     best_f1 = -1.0
     patience_counter = 0
     best_dir = str(Path(output_dir) / "best")
@@ -254,7 +200,7 @@ def train(
     for epoch in range(1, num_epochs + 1):
         epoch_start = time.time()
 
-        # ── Train phase ───────────────────────────────────────────────
+        # ── Train ─────────────────────────────────────────────────────
         model.train()
         running_loss = 0.0
         step_count = 0
@@ -265,23 +211,13 @@ def train(
             labels = batch["labels"].to(device)
 
             with torch.amp.autocast("cuda", enabled=use_bf16, dtype=torch.bfloat16):
-                # model.forward() returns (crf_nll, emissions_fp32, viterbi_paths).
-                # Emissions are already fp32 inside the model for CRF stability.
-                crf_loss, emissions, _ = model(
-                    input_ids=input_ids,
-                    attention_mask=attention_mask,
-                    labels=labels,
-                )
-                # Auxiliary weighted CE on emissions: handles class imbalance and
-                # gives a direct per-token gradient alongside the CRF sequence loss.
+                crf_loss, emissions, _ = model(input_ids, attention_mask, labels)
                 ce_loss = _ce_loss_fct(emissions.view(-1, NUM_LABELS), labels.view(-1))
                 loss = crf_loss + 0.1 * ce_loss
 
-            scaler.scale(loss).backward()
-            scaler.unscale_(optimizer)
+            loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), MAX_GRAD_NORM)
-            scaler.step(optimizer)
-            scaler.update()
+            optimizer.step()
             optimizer.zero_grad()
             scheduler.step()
 
@@ -289,13 +225,12 @@ def train(
             step_count += 1
 
             if step % log_every == 0 or step == 1:
-                avg = running_loss / step_count
-                print(f"  Epoch {epoch} step {step}/{len(train_loader)}  loss={avg:.4f}", flush=True)
+                print(f"  Epoch {epoch} step {step}/{len(train_loader)}  loss={running_loss / step_count:.4f}", flush=True)
 
         train_loss = running_loss / step_count
         history["train_loss"].append(train_loss)
 
-        # ── Validation phase ──────────────────────────────────────────
+        # ── Validation ────────────────────────────────────────────────
         model.eval()
         val_loss_sum = 0.0
         val_steps = 0
@@ -308,10 +243,7 @@ def train(
                 labels = batch["labels"].to(device)
 
                 with torch.amp.autocast("cuda", enabled=use_bf16, dtype=torch.bfloat16):
-                    # Single forward pass: returns loss + emissions + Viterbi paths
-                    crf_loss_val, emissions, crf_paths = model(
-                        input_ids, attention_mask, labels
-                    )
+                    crf_loss_val, emissions, crf_paths = model(input_ids, attention_mask, labels)
                     ce_loss_val = _ce_loss_fct(emissions.view(-1, NUM_LABELS), labels.view(-1))
                     val_loss = crf_loss_val + 0.1 * ce_loss_val
 
@@ -325,26 +257,19 @@ def train(
         val_loss = val_loss_sum / val_steps
         history["val_loss"].append(val_loss)
 
-        # Token accuracy
-        correct = sum(
-            t == p for ts, ps in zip(all_true, all_pred) for t, p in zip(ts, ps)
-        )
+        correct = sum(t == p for ts, ps in zip(all_true, all_pred) for t, p in zip(ts, ps))
         total_toks = sum(len(ts) for ts in all_true)
         val_acc = correct / total_toks if total_toks else 0.0
         history["val_token_acc"].append(val_acc)
 
-        # Entity F1 (seqeval)
         val_f1 = seqeval_f1(all_true, all_pred)
         history["val_entity_f1"].append(val_f1)
 
         elapsed = time.time() - epoch_start
         print(
             f"Epoch {epoch}/{num_epochs}  "
-            f"train_loss={train_loss:.4f}  "
-            f"val_loss={val_loss:.4f}  "
-            f"val_acc={val_acc:.4f}  "
-            f"val_f1={val_f1:.4f}  "
-            f"({elapsed:.1f}s)",
+            f"train_loss={train_loss:.4f}  val_loss={val_loss:.4f}  "
+            f"val_acc={val_acc:.4f}  val_f1={val_f1:.4f}  ({elapsed:.1f}s)",
             flush=True,
         )
 
@@ -355,12 +280,12 @@ def train(
             Path(best_dir).mkdir(parents=True, exist_ok=True)
             model.save_pretrained(best_dir)
             tokenizer.save_pretrained(best_dir)
-            print(f"  ↑ New best model saved (F1={best_f1:.4f})", flush=True)
+            print(f"  New best model saved (F1={best_f1:.4f})", flush=True)
         else:
             patience_counter += 1
             print(f"  No improvement (patience {patience_counter}/{EARLY_STOPPING_PATIENCE})", flush=True)
             if patience_counter >= EARLY_STOPPING_PATIENCE:
-                print(f"  Early stopping triggered (patience={EARLY_STOPPING_PATIENCE})", flush=True)
+                print(f"  Early stopping triggered.", flush=True)
                 break
 
     # ── Save history ──────────────────────────────────────────────────
@@ -368,14 +293,7 @@ def train(
     log_dir.mkdir(parents=True, exist_ok=True)
     with open(log_dir / "history.json", "w") as f:
         json.dump(history, f, indent=2)
+
     print(f"\nTraining complete. Best val F1: {best_f1:.4f}")
     print(f"Checkpoint: {best_dir}")
-    print(f"History:    {log_dir / 'history.json'}")
-
     return history
-
-
-# ── CLI ───────────────────────────────────────────────────────────────────
-
-if __name__ == "__main__":
-    train()

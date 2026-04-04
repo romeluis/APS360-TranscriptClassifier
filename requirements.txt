@@ -1,20 +1,31 @@
-# Transcript Generator
+# Core ML
+transformers>=4.56,<5
+tokenizers>=0.22,<0.23
+pytorch-crf>=0.7.2
+seqeval>=1.2.2
+
+# Data & preprocessing
+numpy>=1.24.0
+marker-pdf>=1.0.0
+opendataloader-pdf[hybrid]>=2.2.0
+docling[easyocr,rapidocr]>=2.84.0
 weasyprint>=60.0
+
+# Transcript generation
 beautifulsoup4>=4.12.0
 faker>=20.0.0
-lxml>=5.0.0
-pypdf>=4.0.0
+lxml>=4.9.0
+
+# RunPod
+runpod>=1.7.0
+python-dotenv>=1.0.0
+protobuf>=4.25.0
+sentencepiece>=0.1.99
+hf_transfer>=0.1.4
+
+# Menu
+questionary>=2.0
+
+# PDF handling
+pypdf>=3.0.0
 pdfplumber>=0.10.0
-
-# Baseline Model
-seqeval>=1.2.0
-tabulate>=0.9.0
-
-# Evaluation
-matplotlib>=3.7.0
-numpy>=1.24.0
-
-# BERT NER Model
-torch>=2.0.0
-transformers>=4.35.0
-pytorch-crf>=0.7.2   # provides 'torchcrf' (Colab); locally may be 'TorchCRF' — both work

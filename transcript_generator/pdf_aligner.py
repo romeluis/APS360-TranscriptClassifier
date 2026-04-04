@@ -17,7 +17,7 @@ import difflib
 
 from pypdf import PdfReader
 
-from label_extractor import extract_text_and_annotations, text_to_bio_labels
+from .label_extractor import extract_text_and_annotations, text_to_bio_labels
 
 
 # ---------------------------------------------------------------------------
@@ -138,7 +138,7 @@ def extract_pdf_labels(html_string, pdf_path):
     tokens, labels = text_to_bio_labels(pdf_text, pdf_annotations)
 
     # For comparison, count HTML tokens
-    from label_extractor import extract_labels
+    from .label_extractor import extract_labels
     html_tokens, _ = extract_labels(html_string)
 
     stats = {

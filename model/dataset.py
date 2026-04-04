@@ -1,43 +1,112 @@
 """
-PyTorch Dataset for BERT token-classification NER.
+PyTorch Dataset for token-classification NER.
 
 Handles:
-  - Subword tokenisation alignment (first subword gets BIO label, rest → -100)
-  - Sliding-window chunking for transcripts that exceed MAX_SEQ_LEN
-  - Optional online augmentation: raw samples are augmented at __getitem__ time
-    so the model sees a different noisy version of each sample every epoch.
+  - Subword tokenisation alignment (first subword gets BIO label, rest -> -100)
+  - Sliding-window chunking for transcripts exceeding MAX_SEQ_LEN
+  - Optional online augmentation: raw samples augmented at __getitem__ time
+  - Data loading from JSON files
 """
 
+import json
 import random
+from pathlib import Path
+
 import torch
 from torch.utils.data import Dataset
 
 from .config import LABEL_TO_ID, MAX_SEQ_LEN, STRIDE
 
 
+# ── Data loading ──────��───────────────────────────────────────────────────
+
+
+def load_dataset(data_dir: str) -> list[dict]:
+    """Load all transcript JSON files from a directory tree.
+
+    Each JSON file must contain: tokens (list[str]), ner_tags (list[str]),
+    metadata (dict with at least template_id).
+    """
+    data_path = Path(data_dir)
+    samples = []
+    for json_path in sorted(data_path.rglob("transcript_*.json")):
+        with open(json_path, encoding="utf-8") as f:
+            data = json.load(f)
+        if "tokens" in data and "ner_tags" in data:
+            samples.append(data)
+    return samples
+
+
+def group_by_template(samples: list[dict]) -> dict[str, list[dict]]:
+    """Group samples by their template_id."""
+    groups: dict[str, list[dict]] = {}
+    for sample in samples:
+        tid = sample.get("metadata", {}).get("template_id", "unknown")
+        groups.setdefault(tid, []).append(sample)
+    return groups
+
+
+def split_by_template(
+    data_dir: str,
+    train_ratio: float = 0.60,
+    val_ratio: float = 0.20,
+    seed: int = 42,
+) -> tuple[list[dict], list[dict], list[dict], dict]:
+    """Split samples into train/val/test by template ID.
+
+    Returns (train_samples, val_samples, test_samples, split_info).
+    """
+    samples = load_dataset(data_dir)
+    groups = group_by_template(samples)
+    template_ids = sorted(groups.keys())
+
+    rng = random.Random(seed)
+    rng.shuffle(template_ids)
+
+    n = len(template_ids)
+    n_train = round(n * train_ratio)
+    n_val = round(n * val_ratio)
+
+    train_ids = template_ids[:n_train]
+    val_ids = template_ids[n_train:n_train + n_val]
+    test_ids = template_ids[n_train + n_val:]
+
+    train_samples = [s for tid in train_ids for s in groups[tid]]
+    val_samples = [s for tid in val_ids for s in groups[tid]]
+    test_samples = [s for tid in test_ids for s in groups[tid]]
+
+    split_info = {
+        "seed": seed,
+        "total_templates": n,
+        "train_templates": train_ids,
+        "val_templates": val_ids,
+        "test_templates": test_ids,
+        "train_samples": len(train_samples),
+        "val_samples": len(val_samples),
+        "test_samples": len(test_samples),
+    }
+
+    return train_samples, val_samples, test_samples, split_info
+
+
+# ── Dataset ─────────────���────────────────────────────���────────────────────
+
+
 class TranscriptNERDataset(Dataset):
     """Dataset supporting both pre-tokenised sliding windows and online augmentation.
 
-    augment=False (default — used for val/test):
-        Pre-tokenises all samples into sliding windows at construction time.
-        __len__ == number of windows. Fast DataLoader with zero per-item overhead.
-
-    augment=True (used for train):
-        Stores raw (tokens, ner_tags) pairs. At __getitem__ time, applies
-        augment_tokens() with a fresh random seed then tokenises on-the-fly
-        (truncation only, no overflow windows). __len__ == number of raw samples.
-        The model sees a different noisy version of each sample every epoch,
-        which significantly reduces overfitting.
+    augment=False (val/test): Pre-tokenises all windows at construction.
+    augment=True (train): Stores raw samples; augments + tokenises on-the-fly.
     """
 
     def __init__(
         self,
-        samples,
+        samples: list[dict],
         tokenizer,
-        max_length=MAX_SEQ_LEN,
-        stride=STRIDE,
-        augment=False,
-        augment_seed=42,
+        max_length: int = MAX_SEQ_LEN,
+        stride: int = STRIDE,
+        augment: bool = False,
+        augment_seed: int = 42,
     ):
         self.tokenizer = tokenizer
         self.max_length = max_length
@@ -45,22 +114,13 @@ class TranscriptNERDataset(Dataset):
         self.augment = augment
 
         if augment:
-            # Store raw samples; tokenise and augment on the fly in __getitem__
             self._raw_samples = [
                 (sample["tokens"], sample["ner_tags"]) for sample in samples
             ]
-            # Shared RNG advances on every __getitem__ call, giving different
-            # augmentation each time (and across epochs) without fixing noise
-            # by sample index.
             self._rng = random.Random(augment_seed)
         else:
-            # Original behaviour: pre-tokenise all windows at construction time
-            self.windows = []
+            self.windows: list[dict] = []
             self._prepare(samples, tokenizer, max_length, stride)
-
-    # ------------------------------------------------------------------ #
-    #  Pre-tokenisation path (val / test)                                  #
-    # ------------------------------------------------------------------ #
 
     def _prepare(self, samples, tokenizer, max_length, stride):
         for sample in samples:
@@ -88,17 +148,8 @@ class TranscriptNERDataset(Dataset):
                     "labels": torch.tensor(label_ids, dtype=torch.long),
                 })
 
-    # ------------------------------------------------------------------ #
-    #  Online-augmentation path (train)                                    #
-    # ------------------------------------------------------------------ #
-
     def _tokenize_single(self, tokens, ner_tags):
-        """Tokenise one (tokens, ner_tags) pair with truncation only (no overflow).
-
-        Long transcripts are silently truncated to max_length. This is acceptable
-        for training because augmentation provides variety; the sliding-window path
-        is retained for val/test evaluation.
-        """
+        """Tokenise one sample with truncation only (no overflow windows)."""
         encoding = self.tokenizer(
             tokens,
             is_split_into_words=True,
@@ -118,21 +169,11 @@ class TranscriptNERDataset(Dataset):
             "labels": torch.tensor(label_ids, dtype=torch.long),
         }
 
-    # ------------------------------------------------------------------ #
-    #  Label alignment (shared by both paths)                              #
-    # ------------------------------------------------------------------ #
-
     @staticmethod
     def _align_labels(word_ids, ner_tags):
         """Map BIO labels to subword positions.
 
-        - Special tokens ([CLS], [SEP], [PAD]) → -100
-        - First subword of a whitespace token → its BIO label id
-        - Continuation subwords → -100
-
-        The word_id guard (word_id < len(ner_tags)) handles edge cases where
-        augmentation grows the token list beyond what was originally labelled
-        (e.g. _split_tokens can append a new token beyond the last label).
+        Special tokens -> -100, first subword -> BIO label, continuations -> -100.
         """
         label_ids = []
         prev_word_id = None
@@ -149,10 +190,6 @@ class TranscriptNERDataset(Dataset):
             prev_word_id = word_id
         return label_ids
 
-    # ------------------------------------------------------------------ #
-    #  Dataset protocol                                                    #
-    # ------------------------------------------------------------------ #
-
     def __len__(self):
         if self.augment:
             return len(self._raw_samples)
@@ -162,7 +199,6 @@ class TranscriptNERDataset(Dataset):
         if not self.augment:
             return self.windows[idx]
 
-        # Deferred import to avoid circular dependency at module load time
         from transcript_generator.noise_augmenter import augment_tokens
 
         tokens, ner_tags = self._raw_samples[idx]
